@@ -1,0 +1,10 @@
+{:builds {:app {:modules
+                {:main
+                 {:init-fn
+                  bennischwerdtner.typepi.page/page}}
+                :output-dir "resources/public/js"
+                :paths ["src/clj" "src/cljs" "resources"]
+                :target :browser}}
+
+ :deps {:aliases [:client]}
+ :nrepl {:port 7014}}
