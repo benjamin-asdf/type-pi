@@ -11,23 +11,19 @@
 (defn start
   {:shadow/requires-server true}
   []
-
   (shadow-server/start!)
-  (shadow/watch :app)
-  ;; build css once on start
+  (shadow.cljs.devtools.api/watch :app {:autobuild false})
   (build/css-release)
-  ;; then setup the watcher that rebuilds everything on
-  ;; change
-  (reset! css-watch-ref (fs-watch/start
-                         {}
-                         [(io/file "src" "cljs")]
-                         ["cljs" "cljc" "clj"]
-                         (fn [_]
-                           (try (println "refresh css")
-                                (build/css-release)
-                                (catch Exception e
-                                  (prn [:css-failed
-                                        e]))))))
+  (reset! css-watch-ref
+    (fs-watch/start
+      {}
+      [(io/file "src" "cljs")]
+      ["cljs" "cljc" "clj"]
+      (fn [_]
+        (try (println "-- refresh css/cljs --")
+             (build/css-release)
+             (shadow.cljs.devtools.api/watch-compile! :app)
+             (catch Exception e (prn [:css-failed e]))))))
   ::started)
 
 (defn stop []
@@ -46,9 +42,4 @@
   (deref (promise)))
 
 (comment
-  (go)
-
-  (shadow-server/reload!)
-
-
-  )
+  (go))
