@@ -1,9 +1,3 @@
 {:deps {io.github.babashka/sci.nrepl {:mvn/version "0.0.2"}}
- :tasks
-
-
- {serve-local (shell "http-server :dir resources/public/")}
-
-
-
- }
+ :tasks {serve-local
+           (shell "http-server :dir resources/public/")}}
