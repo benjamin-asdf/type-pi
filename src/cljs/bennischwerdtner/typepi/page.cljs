@@ -16,7 +16,7 @@
 (defonce pi (r/atom ""))
 (defonce typed (r/atom []))
 
-(def typing-state
+(def state
   (r/atom
    {:cursor-idx 0
     :page-idx 0
@@ -66,113 +66,148 @@
 
 (def $idle-cursor (css {:animation "blink 3s infinite"}))
 
-(defn udpate-typed
-  [{:as typing-state :keys [typed-history]} pi k]
-  (let
-      [current-pi (nth pi (next-pi-idx typing-state))
-       correct? (= (str current-pi) k)
-       typing-state
-       (case k
-         :back (-> typing-state
-                   (update :cursor-idx dec)
-                   (update :typed pop))
-         (cond-> typing-state
-           :always (update :typed-history conj k)
-           (or correct? (= k :reveal)) (update :cursor-idx inc)
-           (= k :reveal) (update :typed conj :revealed)
-           correct? (update :typed conj :success)))]
-    typing-state))
 
+(def $almost-done
+  (css {
+        ;; :animation "blink-border 3s infinite"
+        :animation "blink-2 3s infinite"
+        :border-color "var(--green-yellow)"}))
+
+(defn page-forward
+  [state]
+  (-> state
+      (update :page-idx inc)
+      (assoc :cursor-idx 0)
+      (assoc :typed [])))
+
+(defn page-backward
+  [state]
+  (-> state
+      (update :page-idx (comp #(min % 0) dec))
+      (assoc :cursor-idx 0)
+      (assoc :typed [])))
+
+(defn normalize-page
+  [{:as state :keys [typed-history cursor-idx per-page]}]
+  (cond (< per-page cursor-idx) (page-forward state)
+        (< cursor-idx 0) (page-backward state)
+        :else state))
+
+(defn page-almost-done?
+  [{:as state :keys [typed-history cursor-idx per-page]}]
+  (def per-page per-page)
+  (def cursor-idx cursor-idx)
+  (< (- per-page 3) (inc cursor-idx)))
+
+(defn udpate-typed
+  [{:as state :keys [typed-history]} pi k]
+  (let [current-pi (nth pi (next-pi-idx state))
+        correct? (= (str current-pi) k)
+        state (case k
+                :back (-> state
+                          (update :cursor-idx dec)
+                          (update :typed pop))
+                (cond-> state
+                  :always (update :typed-history conj k)
+                  (or correct? (= k :reveal))
+                  (update :cursor-idx inc)
+                  (= k :reveal)
+                  (update :typed conj :revealed)
+                  correct? (update :typed conj :success)))]
+    (-> state
+        normalize-page)))
 
 (defn type-area
   [{:keys []}]
   (let [idle? (r/atom false)
         idle-timeout (r/atom nil)
-        handle-typed
-        (fn [k]
-          (when-let [pi @pi]
-            (let [k (@keymap (str k) k)]
-              (swap! typing-state udpate-typed pi k)
-              (swap! idle? (constantly false)))))
+        handle-typed (fn [k]
+                       (when-let [pi @pi]
+                         (let [k (@keymap (str k) k)]
+                           (swap! state udpate-typed pi k)
+                           (swap! idle? (constantly
+                                          false)))))
         active? (r/atom false)
         keydown-listener (js/window.addEventListener
-                          "keydown"
-                          (fn [e]
-                            (handle-typed (.-key e))
-                            #_(if (= (.-key e) "Tab")
-                                nil
-                                (when @active?
-                                  (handle-typed (.-key e))
-                                  (.preventDefault e)))))]
+                           "keydown"
+                           (fn [e]
+                             (handle-typed (.-key e))
+                             #_(if (= (.-key e) "Tab")
+                                 nil
+                                 (when @active?
+                                   (handle-typed (.-key e))
+                                   (.preventDefault e)))))]
     (r/create-class
-     {:component-did-mount (fn []
-                             (js/window.addEventListener
-                              "keydown"
-                              keydown-listener))
-      :component-will-unmount
-      (fn []
-        (js/window.removeEventListener "keydown"
-                                       keydown-listener))
-      :name :type-area
-      :reagent-render
-      (fn []
-        (when-let [idle @idle-timeout]
-          (js/clearTimeout idle))
-        (js/setTimeout (fn []
-                         (swap! idle? (constantly true)))
-                       1000)
-        (let [$base (css "u-background-lighter"
-                         :shadow
-                         {:max-width "90%"
-                          :min-width "50%"}
-                         {:min-height "4rem"}
-                         :rounded
-                         :p-6
-                         :rounded)
-              $selected (css :shadow
-                             :rounded :transition-all
-                             :duration-200 :ease-in-out)]
-          [:div
-           {:class [$base (when @active? $selected)]
-            :on-blur #(reset! active? false)
-            :on-focus #(reset! active? true)
-            :tabIndex "0"}
+      {:component-did-mount
+       (fn [] (js/window.addEventListener "keydown" keydown-listener))
+       :component-will-unmount
+       (fn [] (js/window.removeEventListener "keydown" keydown-listener))
+       :name :type-area
+       :reagent-render
+       (fn []
+         (when-let [idle @idle-timeout]
+           (js/clearTimeout idle))
+         (js/setTimeout (fn []
+                          (swap! idle? (constantly true)))
+                        1000)
+         (let [$base
+               (css "u-background-lighter"
+                    :shadow
+                    {:max-width "90%"
+                     :min-width "50%"}
+                    {:min-height "4rem"}
+                    :rounded
+                    :p-6
+                    :border-2
+                    {:border-color "transparent"}
+                    :rounded)
+               ]
            [:div
-            {:class (css :tracking-widest :text-5xl)}
-            (let [{:keys
-                   [page-idx cursor-idx per-page typed]}
-                  @typing-state]
-              (doall
-               (map-indexed
-                (fn [idx c]
-                  [:span
-                   {:class
-                    (str
-                     (css :transition-all)
-                     " "
-                     (case (get typed idx :no)
-                       :wrong "u-error"
-                       :revealed "u-color-default"
-                       :no (css
-                             {:color
-                              "transparent"})
-                       "u-success")
-                     " "
-                     (when (= cursor-idx idx)
-                       (str
-                        (css
-                          :underline
-                          {:text-decoration-color
-                           "var(--navajo-white)"})
-                        " "
-                        (when @idle?
-                          $idle-cursor))))
-                    :key idx} c])
-                (take per-page
-                      (drop
-                       (* page-idx per-page)
-                       @pi)))))]]))})))
 
+            {:class
+             [$base
+              (when
+                  (page-almost-done? @state)
+                  $almost-done)
+              ]
+             :on-blur #(reset! active? false)
+             :on-focus #(reset! active? true)
+             :tabIndex "0"}
+
+            [:div
+             {:class (css :tracking-widest :text-5xl)}
+             (let [{:keys [page-idx cursor-idx per-page
+                           typed]}
+                   @state]
+               (doall
+                (map-indexed
+                 (fn [idx c]
+                   [:span
+                    {:class
+                     (str
+                      (css :transition-all)
+                      " " (case (get typed idx :no)
+                            :wrong "u-error"
+                            :revealed
+                            "u-color-default"
+                            :no "u-color-default"
+                            ;; (css {:color
+                            ;; "transparent"})
+                            "u-success")
+                      " "
+                      (when (= cursor-idx idx)
+                        (str
+                         (css
+                           :underline
+                           {:text-decoration-color
+                            "var(--navajo-white)"})
+                         " "
+                         (when @idle?
+                           $idle-cursor))))
+                     :key idx} c])
+                 (take per-page
+                       (drop (* page-idx per-page)
+                             @pi)))))]]))})))
 
 (defn ui
   []
