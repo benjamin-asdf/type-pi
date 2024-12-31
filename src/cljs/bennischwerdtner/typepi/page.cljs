@@ -14,47 +14,46 @@
 ;; black on green-yellow is also good
 
 (defonce pi (r/atom ""))
-(defonce typed (r/atom [1 4 1 :wrong]))
+(defonce typed (r/atom []))
+
+(def typing-state
+  (r/atom
+   {:cursor-idx 0
+    :page-idx 0
+    :per-page (* 3 (+ 2 1 2 1 2))
+    :typed []
+    :typed-history []}))
+
+(defn next-pi-idx
+  [{:keys [cursor-idx per-page page-idx]}]
+  (+ (* per-page page-idx) cursor-idx))
 
 (defonce keymap
   (r/atom
+    {"." :repeat
+     ";" :reveal
+     "ArrowLeft" :left
+     "ArrowRight" :right
+     "Backspace" :back
+     "a" "1"
+     "b" "2"
+     "d" "4"
+     "e" "5"
+     "g" "7"
+     "h" "8"
+     "i" "9"
+     "j" "9"
+     "k" "4"
+     "l" "2"
+     "m" "3"
+     "n" "9"
+     "o" "0"
+     "s" "6"
+     "t" "4"
+     "u" "0"
+     "y" "5"}))
 
-   {
 
-    ;; "a" "1"
-    ;; "s" "2"
-    ;; "d" "3"
-    ;; "f" "4"
-    ;; "g" "5"
-    ;; "h" "6"
-
-    ;; "j" "7"
-    ;; "k" "8"
-    ;; "l" "9"
-    ;; "o" "0"
-
-    "s" "6"
-    "u" "0"
-    "o" "0"
-    "l" "2"
-    "e" "5"
-    "g" "7"
-    "h" "8"
-    "t" "4"
-    "d" "4"
-    "m" "3"
-    "n" "9"
-    "j" "9"
-    "k" "4"
-    "y" "5"
-    "i" "9"
-    "p" "8"
-
-    "." :repeat
-
-    "Backspace" :back
-    "ArrowLeft" :left
-    "ArrowRight" :right}))
 
 (-> (js/fetch "pi.txt")
     (.then #(.. % text))
@@ -67,92 +66,112 @@
 
 (def $idle-cursor (css {:animation "blink 3s infinite"}))
 
+(defn udpate-typed
+  [{:as typing-state :keys [typed-history]} pi k]
+  (let
+      [current-pi (nth pi (next-pi-idx typing-state))
+       correct? (= (str current-pi) k)
+       typing-state
+       (case k
+         :back (-> typing-state
+                   (update :cursor-idx dec)
+                   (update :typed pop))
+         (cond-> typing-state
+           :always (update :typed-history conj k)
+           (or correct? (= k :reveal)) (update :cursor-idx inc)
+           (= k :reveal) (update :typed conj :revealed)
+           correct? (update :typed conj :success)))]
+    typing-state))
+
 
 (defn type-area
   [{:keys []}]
-  (let [cursor (r/atom {:display-idx (count [1 4 1 :wrong])
-                        :idle? false
-                        :page 0
-                        :pi-idx (count [1 4 1 :wrong])})
+  (let [idle? (r/atom false)
         idle-timeout (r/atom nil)
         handle-typed
-          (fn [k]
-            (when-let [pi @pi]
-              (let [current-pi (nth pi (count @typed))
-                    k (@keymap (str k) k)]
-                (if (= (str current-pi) k)
-                  (swap! typed conj current-pi)
-                  (swap! typed conj :wrong))
-                (swap! cursor assoc :idle? false))))
+        (fn [k]
+          (when-let [pi @pi]
+            (let [k (@keymap (str k) k)]
+              (swap! typing-state udpate-typed pi k)
+              (swap! idle? (constantly false)))))
         active? (r/atom false)
         keydown-listener (js/window.addEventListener
-                           "keydown"
-                           (fn [e]
-                             (println (.-key e))
-                             (if (= (.-key e) "Tab")
-                               nil
-                               (when @active?
-                                 (handle-typed (.-key e))
-                                 (.preventDefault e)))))]
+                          "keydown"
+                          (fn [e]
+                            (handle-typed (.-key e))
+                            #_(if (= (.-key e) "Tab")
+                                nil
+                                (when @active?
+                                  (handle-typed (.-key e))
+                                  (.preventDefault e)))))]
     (r/create-class
-      {:component-did-mount (fn []
-                              (js/window.addEventListener
-                                "keydown"
-                                keydown-listener))
-       :component-will-unmount
-         (fn []
-           (js/window.removeEventListener "keydown"
-                                          keydown-listener))
-       :name :type-area
-       :reagent-render
-         (fn []
-           (when-let [idle @idle-timeout]
-             (js/clearTimeout idle))
-           (js/setTimeout
-             (fn [] (swap! cursor assoc :idle? true))
-             1000)
-           (let [$base (css "u-background-lighter"
-                            :shadow
-                            :w-1of2
-                            {:min-height "4rem"}
-                            :rounded
-                            :p-6
-                            :rounded)
-                 $selected (css :shadow
-                                :rounded :transition-all
-                                :duration-200 :ease-in-out)]
-             [:div
-              {:class [$base (when @active? $selected)]
-               :on-blur #(reset! active? false)
-               :on-focus #(reset! active? true)
-               :tabIndex "0"}
-              [:div
-               {:class (css :tracking-widest :text-5xl)}
-               (doall
-                 (map-indexed
-                   (fn [idx c]
-                     [:span
-                      {:class
-                         (str
-                           (css :transition-all)
-                           " " (case (get @typed idx :no)
-                                 :wrong "u-error"
-                                 :no (css {:color
-                                             "transparent"})
-                                 "u-success")
-                           " "
-                             (when (= (:display-idx @cursor)
-                                      idx)
-                               (str
-                                 (css
-                                   :underline
-                                   {:text-decoration-color
-                                      "var(--navajo-white)"})
-                                 " "
-                                 (when (:idle? @cursor)
-                                   $idle-cursor))))
-                       :key idx} c])
-                   (take 10 @pi)))]]))})))
+     {:component-did-mount (fn []
+                             (js/window.addEventListener
+                              "keydown"
+                              keydown-listener))
+      :component-will-unmount
+      (fn []
+        (js/window.removeEventListener "keydown"
+                                       keydown-listener))
+      :name :type-area
+      :reagent-render
+      (fn []
+        (when-let [idle @idle-timeout]
+          (js/clearTimeout idle))
+        (js/setTimeout (fn []
+                         (swap! idle? (constantly true)))
+                       1000)
+        (let [$base (css "u-background-lighter"
+                         :shadow
+                         {:max-width "90%"
+                          :min-width "50%"}
+                         {:min-height "4rem"}
+                         :rounded
+                         :p-6
+                         :rounded)
+              $selected (css :shadow
+                             :rounded :transition-all
+                             :duration-200 :ease-in-out)]
+          [:div
+           {:class [$base (when @active? $selected)]
+            :on-blur #(reset! active? false)
+            :on-focus #(reset! active? true)
+            :tabIndex "0"}
+           [:div
+            {:class (css :tracking-widest :text-5xl)}
+            (let [{:keys
+                   [page-idx cursor-idx per-page typed]}
+                  @typing-state]
+              (doall
+               (map-indexed
+                (fn [idx c]
+                  [:span
+                   {:class
+                    (str
+                     (css :transition-all)
+                     " "
+                     (case (get typed idx :no)
+                       :wrong "u-error"
+                       :revealed "u-color-default"
+                       :no (css
+                             {:color
+                              "transparent"})
+                       "u-success")
+                     " "
+                     (when (= cursor-idx idx)
+                       (str
+                        (css
+                          :underline
+                          {:text-decoration-color
+                           "var(--navajo-white)"})
+                        " "
+                        (when @idle?
+                          $idle-cursor))))
+                    :key idx} c])
+                (take per-page
+                      (drop
+                       (* page-idx per-page)
+                       @pi)))))]]))})))
 
 
 (defn ui
@@ -160,14 +179,12 @@
   [:div
    [:h1
     {:class (css :mt-8 :font-bold
-
-                 :items-center :w-full
                  :justify-center :flex)} "type pi"]
-
    [:div
-    {:class
-     (css {:min-height "50vh"} :flex :flex-col :items-center :justify-center :w-full )}
-    [type-area]]])
+    {:class (css {:min-height "50vh"}
+                 :flex
+                 :flex-col :items-center
+                 :justify-center :w-full)} [type-area]]])
 
 (defn ^:dev/after-load  page []
   (rd/render
