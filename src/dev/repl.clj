@@ -6,7 +6,7 @@
    [shadow.cljs.devtools.server :as shadow-server]
    [shadow.cljs.devtools.server.fs-watch :as fs-watch]))
 
-(defonce css-watch-ref (atom nil))
+(defonce dev-watch-ref (atom nil))
 
 (defn start
   {:shadow/requires-server true}
@@ -14,7 +14,7 @@
   (shadow-server/start!)
   (shadow.cljs.devtools.api/watch :app {:autobuild false})
   (build/css-release)
-  (reset! css-watch-ref
+  (reset! dev-watch-ref
     (fs-watch/start
       {}
       [(io/file "src" "cljs")]
@@ -23,11 +23,11 @@
         (try (println "-- refresh css/cljs --")
              (build/css-release)
              (shadow.cljs.devtools.api/watch-compile! :app)
-             (catch Exception e (prn [:css-failed e]))))))
+             (catch Exception e (prn [:watch-failed e]))))))
   ::started)
 
 (defn stop []
-  (when-some [css-watch @css-watch-ref]
+  (when-some [css-watch @dev-watch-ref]
     (fs-watch/stop css-watch))
 
   ::stopped)
@@ -38,8 +38,17 @@
 
 (defn watch-css [_]
   (go)
-  (println "started watch-css")
+  (println "started dev-watch")
   (deref (promise)))
 
 (comment
-  (go))
+  (map
+   (juxt char #(- %  (dec (int \a))))
+   (range (int \a) (+ 16 (int \a))))
+
+
+  ;; abcdefgh ijklmnop
+  ;;
+
+  (go)
+  (shadow/reload-deps!))

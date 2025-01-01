@@ -1,10 +1,19 @@
-{:builds {:app {:modules
-                {:main
-                 {:init-fn
-                  bennischwerdtner.typepi.page/page}}
-                :output-dir "resources/public/js"
-                :paths ["src/clj" "src/cljs" "resources"]
-                :target :browser}}
+{:builds
+ {:app {:modules
+        {:main
+         {:init-fn
+          bennischwerdtner.typepi.page/page}}
+        :output-dir "resources/public/js"
+        :paths ["src/clj" "src/cljs" "resources"]
+        :target :browser
+        ;; :js-options
+        ;; {:resolve
+        ;;  {"firefly"
+        ;;   {:target :file
+        ;;    :file "resources/public/firefly.jsx"}}}
+
+        }
+  }
 
  :deps {:aliases [:client]}
  :nrepl {:port 7014}}
