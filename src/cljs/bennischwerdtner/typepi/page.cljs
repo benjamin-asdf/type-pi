@@ -4,6 +4,37 @@
    [reagent.core :as r]
    [shadow.css :refer [css] :include-macros true]))
 
+(defn v* [a b]
+  (cond
+    (and (coll? a) (coll? b))
+    (vec (map * a b))
+    (coll? a)
+    (vec (map * a (repeat b)))
+    (coll? b)
+    (vec (map * b (repeat a)))
+    :else (* a b)))
+
+(defn v+ [a b]
+  (cond
+    (and (coll? a) (coll? b))
+    (vec (map + a b))
+    (coll? a)
+    (vec (map + a (repeat b)))
+    (coll? b)
+    (vec (map + b (repeat a)))
+    :else (+ a b)))
+
+(defn v- [a b]
+  (v+ a (v* -1 b)))
+
+(defn normalize-vector
+  [v]
+  (let [len (Math/sqrt (reduce + (map #(* % %) v)))]
+    (if (zero? len) [0 0] (vec (map #(/ % len) v)))))
+
+(defn vector-len [v]
+  (Math/sqrt (reduce + (map #(* % %) v))))
+
 
 (def dark-surface-color "#121212")
 (def dark-lighter "#1a1a1a")
@@ -26,8 +57,28 @@
     :typed []
     :typed-history []}))
 
-(def points (r/atom {:green 0}))
+(def game-state
+  (r/atom {:entities [;; {:pos [(rand 1000) (rand
+                      ;; 1000)]
+                      ;;  :velocity [10 10]
+                      ;;  :kinetic-energy 0.2}
+                      ;; {:pos [(rand 1000) (rand
+                      ;; 1000)]
+                      ;;  :velocity [10 10]
+                      ;;  :kinetic-energy 0.2}
+                      {:pos [100 100]
+                       :velocity [0 0]
+                       :lifetime 1
+                       ;; :kinetic-energy 0
+                       :forces {:gravity [0 0.1]}}]}))
 
+
+(defonce wobble-anim-state
+  (r/atom :idle))
+(defonce blink-anim-state
+  (r/atom :idle))
+
+(def points (r/atom {:green 0}))
 
 (defn next-pi-idx
   [{:keys [cursor-idx per-page page-idx]}]
@@ -73,7 +124,6 @@
 
 (def $idle-cursor (css {:animation "blink 3s infinite"}))
 
-
 (def $almost-done
   (css {
         ;; :animation "blink-border 3s infinite"
@@ -97,6 +147,7 @@
         dec))
       (assoc :cursor-idx 0)
       (assoc :typed [])))
+
 
 (defn normalize-page
   [{:as state :keys [typed-history cursor-idx per-page]}]
@@ -206,12 +257,15 @@
               {:class
                [$base
                 (when (page-almost-succ? @state)
-                  $almost-done)]
+                  $almost-done)
+                (when (= :playing @blink-anim-state)
+                  "u-blink-green-anim")]
                :tabIndex "0"}
-              [:div
-               {:class (css :tracking-widest
-                            :text-4xl
-                            [:xl :text-5xl])}
+              [:div#number-text
+               {:class
+                (css :tracking-widest
+                     :text-4xl
+                     [:xl :text-5xl])}
                (doall
                  (map-indexed
                    (fn [idx c]
@@ -230,13 +284,15 @@
                            " "
                              (when (= cursor-idx idx)
                                (str
-                                 (css
-                                   :underline
-                                   {:text-decoration-color
-                                      "var(--navajo-white)"})
-                                 " "
-                                 (when @idle?
-                                   $idle-cursor))))
+                                (css
+                                  :underline
+                                  {:text-decoration-color
+                                   "var(--navajo-white)"})
+                                " "
+                                (when @idle?
+                                  $idle-cursor))
+
+                               ))
                        :key idx} c])
                    (take per-page
                          (drop (* page-idx per-page)
@@ -248,29 +304,152 @@
                              :text-3xl)} page-idx]]]))})))
 
 
+(defn firefly
+  [{:keys [pos] [x y] :pos}]
+  [:div
+   {:class (css :absolute
+                :p-2
+                  ;; {:height "1rem" :width "2.5rem"}
+                  :min-w-0
+                :text-center :text-black
+                :rounded-full "c-background-success")
+    :style {:left x :top y}}])
 
-(defn firefly []
-  )
+(defn gaussianRandish
+  []
+  (- (/ (reduce (fn [acc _] (+ acc (Math/random)))
+          0
+          (range 7))
+        7)
+     (/ 1 2)))
+
+(defn norm
+  [mean std]
+  (+ mean (* std (gaussianRandish))))
+
+(defn brownian-motion
+  [{:as e
+    :keys [kinetic-energy acceleration]
+    :or {acceleration 0}}]
+  (assoc e
+    :acceleration (v+ acceleration
+                      [(* kinetic-energy (norm 0 1))
+                       (* kinetic-energy (norm 0 1))])))
+
+
+(defn apply-forces
+  [e dt]
+  (update e
+          :acceleration
+          (fn [a]
+            (v+ a
+                (v* 1000
+                    (reduce (fn [acc f] (v+ acc f))
+                            (vals (:forces e))))))))
+
+(def element-position-1
+  (fn [id]
+    (let [rect (.. (.getElementById js/document id)
+                   getBoundingClientRect)]
+      [(+ (.. rect -x) (/ (.. rect -width) 2))
+       (+ (.. rect -y) (/ (.. rect -height) 2))])))
+
+(defn rand-on-element [id]
+  (let [rect (.. (.getElementById js/document id)
+                 getBoundingClientRect)]
+    [(+ (.. rect -x) (rand (.. rect -width)))
+     (+ (.. rect -y) (rand (.. rect -height)))]))
+
+
+(defn attracted
+  [e id]
+  (let [diff (v- (element-position-1 id) (:pos e))
+        len (vector-len diff)]
+    (assoc-in e
+              [:forces [:attracted id]]
+              (v* (normalize-vector (v- (element-position-1 id)
+                                        (:pos e)))
+                  (+ (rand 0.2) 0.3)))))
+
+(defn physics-update-2d
+  [entities dt]
+  (doall (for [e entities]
+           (cond-> e
+             (:acceleration e)
+             (update :velocity v+ (v* (:acceleration e) dt))
+             (:acceleration e) (update :acceleration v* 0.9)
+             (:velocity e) (update :pos v+ (v* (:velocity e) dt))
+             (:velocity e) (update :velocity v* 0.9)
+             (:kinetic-energy e) (brownian-motion)
+             true (apply-forces dt)))))
+
+(defn entity-update
+  [entities dt]
+  (doall
+   (for [e entities
+         :when (not (:kill e))]
+     (do (cond-> e
+           true (attracted "green-points")
+           (:lifetime e) (update :lifetime #(- % dt))
+           (and (:lifetime e) (< (:lifetime e) 0))
+           (assoc :kill true))))))
+
+(defn play-anim!
+  [ref play-time idle-time]
+  (do (reset! ref :playing)
+      (js/setTimeout
+       (fn []
+         (reset! ref :timeout)
+         (js/setTimeout (fn [] (reset! ref :idle)) idle-time))
+       play-time)))
+
+(defn set-anim!
+  [ref play-time idle-time]
+  (case @ref
+    :playing nil
+    :timeout nil
+    :idle (play-anim! ref play-time idle-time)))
+
+(defn set-wobble-anim! [] (set-anim! wobble-anim-state 100 50))
+(defn set-blink-anim! []
+  (set-anim! blink-anim-state 1200 50))
+
+(defn spawn-firefly!
+  []
+  (set-blink-anim!)
+  (js/setTimeout (fn [] (set-wobble-anim!)) 1000)
+  (swap! game-state update
+         :entities
+         (fn [ents]
+           (conj ents
+                 {:forces {:gravity [0 (+ 0.1 (rand 0.05))]}
+                  :kinetic-energy 100
+                  :lifetime 1.2
+                  :pos (rand-on-element "number-text")
+                  :velocity [(norm 0 4000) (norm 0 4000)]}))))
+
 
 (defn fireflies
   []
-  [:div {:class
-         (css :flex :justify-center)}
-   [:div {:class (css :relative :flex :justify-center)}
-    [:div
-     {:class
-      (css :absolute
-           :p-1
-           {:height "2.5rem" :top "2rem" :width "2.5rem"}
-           :min-w-0
-           ;; :flex
-           ;; :items-center
-           ;; :justify-center
-           :text-center :text-black
-           :rounded-full "c-background-success")}
-     (:green @points)]]])
-
-
+  [:<>
+   (doall (for [[idx e] (map-indexed vector
+                                     (:entities
+                                      @game-state))]
+            ^{:key idx} [firefly e]))
+   [:div {:class (css :flex :justify-center)}
+    [:div {:class (css :relative :flex :justify-center)}
+     [:div#green-points
+      {:class [(css :absolute
+                    :p-1
+                    :transition-all
+                    {:height "2.5rem"
+                     :top "2rem"
+                     :width "2.5rem"}
+                    :min-w-0
+                    :text-center :text-black
+                    :rounded-full "c-background-success")
+               (when (= :playing @wobble-anim-state)
+                 "u-wobble")]} (:green @points)]]]])
 
 (defn ui
   []
@@ -301,8 +480,30 @@
                                :justify-center :flex)}
                   "type pi settings"]])))
 
+(defn ^:dev/after-load page
+  []
+  (rd/render [ui] (.getElementById js/document "app"))
+  (let [zero (atom (.. js/document -timeline -currentTime))]
+    (letfn [(animate [t]
+              (let [dt (/ (- t @zero) 1000)
 
-(defn ^:dev/after-load  page []
-  (rd/render
-   [ui]
-   (.getElementById js/document "app")))
+                    ]
+                (reset! zero t)
+                (swap! game-state update
+                       :entities
+                       (fn [ents]
+                         (-> ents
+                             (physics-update-2d dt)
+                             (entity-update dt)))))
+              (js/requestAnimationFrame animate))]
+      (js/requestAnimationFrame animate)))
+
+
+
+  (js/setInterval
+   (fn []
+     (spawn-firefly!))
+   2000
+   )
+
+  )

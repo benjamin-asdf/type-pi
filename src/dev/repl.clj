@@ -41,14 +41,10 @@
   (println "started dev-watch")
   (deref (promise)))
 
+
 (comment
   (map
    (juxt char #(- %  (dec (int \a))))
    (range (int \a) (+ 16 (int \a))))
-
-
-  ;; abcdefgh ijklmnop
-  ;;
-
   (go)
   (shadow/reload-deps!))
