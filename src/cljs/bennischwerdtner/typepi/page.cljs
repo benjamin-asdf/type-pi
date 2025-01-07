@@ -35,7 +35,6 @@
 (defn vector-len [v]
   (Math/sqrt (reduce + (map #(* % %) v))))
 
-
 (def dark-surface-color "#121212")
 (def dark-lighter "#1a1a1a")
 (def dark-lightest "#242424")
@@ -66,11 +65,12 @@
                       ;; 1000)]
                       ;;  :velocity [10 10]
                       ;;  :kinetic-energy 0.2}
-                      {:pos [100 100]
-                       :velocity [0 0]
-                       :lifetime 1
-                       ;; :kinetic-energy 0
-                       :forces {:gravity [0 0.1]}}]}))
+                      ;; {:pos [100 100]
+                      ;;  :velocity [0 0]
+                      ;;  :lifetime 1
+                      ;;  ;; :kinetic-energy 0
+                      ;;  :forces {:gravity [0 0.1]}}
+                      ]}))
 
 
 (defonce wobble-anim-state
@@ -148,7 +148,6 @@
       (assoc :cursor-idx 0)
       (assoc :typed [])))
 
-
 (defn normalize-page
   [{:as state :keys [typed-history cursor-idx per-page]}]
   (cond (< per-page (inc cursor-idx)) (page-forward state)
@@ -161,10 +160,19 @@
   (and (< (- per-page 3) (inc cursor-idx))
        (every? #{:success} typed)))
 
-(defn udpate-typed
+(declare spawn-firefly!)
+
+(defn correct? [pi k]
+  (= (str (nth pi (next-pi-idx @state))) k))
+
+(defn incorrect? [pi k]
+  (and
+   (#{"0" "1" "2" "3" "4" "5" "6" "7" "8" "9"} k)
+   (not (correct? pi k))))
+
+(defn update-typed
   [{:as state :keys [typed-history]} pi k]
-  (let [current-pi (nth pi (next-pi-idx state))
-        correct? (= (str current-pi) k)
+  (let [correct? (correct? pi k)
         state (case k
                 :back (-> state
                           (update :cursor-idx dec)
@@ -176,9 +184,9 @@
                 (cond-> state
                   :always (update :typed-history conj k)
                   (or correct? (= k :reveal))
-                    (update :cursor-idx inc)
+                  (update :cursor-idx inc)
                   (= k :reveal)
-                    (update :typed conj :revealed)
+                  (update :typed conj :revealed)
                   correct? (update :typed conj :success)))]
     (-> state
         normalize-page)))
@@ -202,6 +210,7 @@
      (next-pi-idx state)]]
    [:div {:class (css :text-sm)} "cursor: " cursor-idx]])
 
+;; (defn)
 
 (defn type-area
   [{:keys []}]
@@ -210,116 +219,138 @@
         handle-typed (fn [k]
                        (when-let [pi @pi]
                          (let [k (@keymap (str k) k)]
-                           (swap! state udpate-typed pi k)
+                           (when (correct? pi k)
+                             (spawn-firefly!))
+                           (when (incorrect? pi k)
+
+                             )
+                           (swap! state update-typed pi k)
                            (swap! idle? (constantly
-                                          false)))))
+                                         false)))))
         keydown-listener (js/window.addEventListener
-                           "keydown"
-                           (fn [e]
-                             (handle-typed (.-key e))
-                             #_(if (= (.-key e) "Tab")
-                                 nil
-                                 (when @active?
-                                   (handle-typed (.-key e))
-                                   (.preventDefault e)))))]
+                          "keydown"
+                          (fn [e]
+                            (handle-typed (.-key e))
+                            #_(if (= (.-key e) "Tab")
+                                nil
+                                (when @active?
+                                  (handle-typed (.-key e))
+                                  (.preventDefault e)))))]
     (r/create-class
-      {:component-did-mount (fn []
-                              (js/window.addEventListener
-                                "keydown"
-                                keydown-listener))
-       :component-will-unmount
-         (fn []
-           (js/window.removeEventListener "keydown"
-                                          keydown-listener))
-       :name :type-area
-       :reagent-render
-         (fn []
-           (when-let [idle @idle-timeout]
-             (js/clearTimeout idle))
-           (js/setTimeout (fn []
-                            (swap! idle? (constantly true)))
-                          1000)
-           (let [$base (css "u-background-lighter"
-                            :shadow
-                            {:max-width "95%"
-                             ;; :min-width "50%"
-                             }
-                            {:min-height "4rem"}
-                            :rounded
-                            :p-6
-                            :border-2
-                            {:border-color "transparent"}
-                            :rounded)
-                 {:keys [page-idx cursor-idx per-page
-                         typed]}
-                   @state]
-             [:div
-              {:class
-               [$base
-                (when (page-almost-succ? @state)
-                  $almost-done)
-                (when (= :playing @blink-anim-state)
-                  "u-blink-green-anim")]
-               :tabIndex "0"}
-              [:div#number-text
-               {:class
-                (css :tracking-widest
-                     :text-4xl
-                     [:xl :text-5xl])}
-               (doall
-                 (map-indexed
-                   (fn [idx c]
-                     [:span
-                      {:class
-                         (str
-                           (css :transition-all)
-                           " " (case (get typed idx :no)
-                                 :wrong "u-error"
-                                 :revealed "u-color-default"
-                                 :no
-                                   ;; "u-color-default"
-                                   (css {:color
-                                           "transparent"})
-                                 "u-success")
-                           " "
-                             (when (= cursor-idx idx)
-                               (str
-                                (css
-                                  :underline
-                                  {:text-decoration-color
-                                   "var(--navajo-white)"})
-                                " "
-                                (when @idle?
-                                  $idle-cursor))
+     {:component-did-mount (fn []
+                             (js/window.addEventListener
+                              "keydown"
+                              keydown-listener))
+      :component-will-unmount
+      (fn []
+        (js/window.removeEventListener "keydown"
+                                       keydown-listener))
+      :name :type-area
+      :reagent-render
+      (fn []
+        (when-let [idle @idle-timeout]
+          (js/clearTimeout idle))
+        (js/setTimeout (fn []
+                         (swap! idle? (constantly true)))
+                       1000)
+        (let [$base (css "u-background-lighter"
+                         :shadow
+                         {:max-width "95%"
+                          ;; :min-width "50%"
+                          }
+                         {:min-height "4rem"}
+                         :rounded
+                         :p-6
+                         :border-2
+                         {:border-color "transparent"}
+                         :rounded)
+              {:keys [page-idx cursor-idx per-page
+                      typed]}
+              @state]
 
-                               ))
-                       :key idx} c])
-                   (take per-page
-                         (drop (* page-idx per-page)
-                               @pi))))]
-              [:div {:class (css :relative)}
-               [:div
-                {:class (css :absolute
-                             {:bottom "-5rem" :left "-1rem"}
-                             :text-3xl)} page-idx]]]))})))
-
+          [:div
+           {:class
+            [$base
+             (when (page-almost-succ? @state)
+               $almost-done)
+             (when (= :playing @blink-anim-state)
+               "u-blink-green-anim")]
+            :tabIndex "0"}
+           [:div {:class (css :relative)}
+            [:div {:class (css :absolute {:left "2rem" :top "-8rem"})}
+             [:div {:class
+                    [
+                     (css :text-6xl
+                          {:transition "0.3s all"})
+                     (when (= 1 cursor-idx)
+                       (css {:color "var(--green-yellow)"}))
+                     ]}
+              "π"]]]
+           [:div#number-text
+            {:class
+             (css :tracking-widest
+                  :text-4xl
+                  [:xl :text-5xl])}
+            (doall
+             (map-indexed
+              (fn [idx c]
+                [:span
+                 {:class
+                  (str
+                   (css :transition-all)
+                   " " (case (get typed idx :no)
+                         :wrong "u-error"
+                         :revealed "u-color-default"
+                         :no
+                         ;; "u-color-default"
+                         (css {:color
+                               "transparent"})
+                         "u-success")
+                   " "
+                   (when (= cursor-idx idx)
+                     (str
+                      (css
+                        :underline
+                        {:text-decoration-color
+                         "var(--navajo-white)"})
+                      " "
+                      (when @idle?
+                        $idle-cursor))))
+                  :key idx} c])
+              (take per-page
+                    (drop (* page-idx per-page)
+                          @pi))))]
+           [:div {:class (css :relative)}
+            [:div
+             {:class (css :absolute
+                          {:bottom "-5rem" :left "-1rem"}
+                          :text-3xl)} page-idx]]]))})))
 
 (defn firefly
   [{:keys [pos] [x y] :pos}]
   [:div
    {:class (css :absolute
                 :p-2
-                  ;; {:height "1rem" :width "2.5rem"}
-                  :min-w-0
+                ;; {:height "1rem" :width "2.5rem"}
+                :min-w-0
                 :text-center :text-black
                 :rounded-full "c-background-success")
     :style {:left x :top y}}])
 
+(defn ->entity [opts]
+  (merge
+   {:entity? true
+    :spawn-time (js/Date.)}
+   opts))
+
+(defn age [e]
+  (- (js/Date.) (:spawn-time e)))
+
 (defn gaussianRandish
   []
   (- (/ (reduce (fn [acc _] (+ acc (Math/random)))
-          0
-          (range 7))
+                0
+                (range 7))
         7)
      (/ 1 2)))
 
@@ -335,7 +366,6 @@
     :acceleration (v+ acceleration
                       [(* kinetic-energy (norm 0 1))
                        (* kinetic-energy (norm 0 1))])))
-
 
 (defn apply-forces
   [e dt]
@@ -360,16 +390,13 @@
     [(+ (.. rect -x) (rand (.. rect -width)))
      (+ (.. rect -y) (rand (.. rect -height)))]))
 
-
 (defn attracted
-  [e id]
+  [e id force]
   (let [diff (v- (element-position-1 id) (:pos e))
         len (vector-len diff)]
     (assoc-in e
-              [:forces [:attracted id]]
-              (v* (normalize-vector (v- (element-position-1 id)
-                                        (:pos e)))
-                  (+ (rand 0.2) 0.3)))))
+      [:forces [:attracted id]]
+      (v* (normalize-vector diff) force))))
 
 (defn physics-update-2d
   [entities dt]
@@ -383,16 +410,8 @@
              (:kinetic-energy e) (brownian-motion)
              true (apply-forces dt)))))
 
-(defn entity-update
-  [entities dt]
-  (doall
-   (for [e entities
-         :when (not (:kill e))]
-     (do (cond-> e
-           true (attracted "green-points")
-           (:lifetime e) (update :lifetime #(- % dt))
-           (and (:lifetime e) (< (:lifetime e) 0))
-           (assoc :kill true))))))
+(defn distance [a b]
+  (Math/sqrt (reduce + (map #(* % %) (v- a b)))))
 
 (defn play-anim!
   [ref play-time idle-time]
@@ -414,20 +433,50 @@
 (defn set-blink-anim! []
   (set-anim! blink-anim-state 1200 50))
 
+(defn update-firefly
+  [e state]
+  (let [reached-target? (< (distance (:pos e)
+                                     (:green-points-position
+                                      state))
+                           40)]
+    (when reached-target?
+      (set-wobble-anim!)
+      (swap! points update :green inc))
+    (cond-> e
+      (< 500 (age e) 1000) (attracted "green-points" 0.5)
+      (< 1000 (age e)) (attracted "green-points" 0.4)
+      reached-target? (assoc :kill? true))))
+
+(defn entity-update
+  [entities dt]
+  (let [state {:green-points-position
+               (element-position-1 "green-points")}]
+    (doall
+     (for [e entities
+           :when (not (:kill? e))]
+       (do (cond-> e
+             (:firefly? e) (update-firefly state)
+             (:lifetime e) (update :lifetime #(- % dt))
+             (and (:lifetime e) (< (:lifetime e) 0))
+             (assoc :kill? true)))))))
+
+
 (defn spawn-firefly!
   []
   (set-blink-anim!)
-  (js/setTimeout (fn [] (set-wobble-anim!)) 1000)
   (swap! game-state update
          :entities
          (fn [ents]
-           (conj ents
-                 {:forces {:gravity [0 (+ 0.1 (rand 0.05))]}
-                  :kinetic-energy 100
-                  :lifetime 1.2
-                  :pos (rand-on-element "number-text")
-                  :velocity [(norm 0 4000) (norm 0 4000)]}))))
-
+           (into
+            ents
+            (repeatedly 1
+                        (fn []
+                          (->entity
+                           {:forces {:gravity [0 (+ 0.1 (rand 0.05))]}
+                            :kinetic-energy 100
+                            :firefly? true
+                            :pos (rand-on-element "number-text")
+                            :velocity [(norm 0 6000) (norm -1000 1000)]})))))))
 
 (defn fireflies
   []
@@ -451,43 +500,42 @@
                (when (= :playing @wobble-anim-state)
                  "u-wobble")]} (:green @points)]]]])
 
+
 (defn ui
   []
   (let [page (r/atom :type-pi)]
     (case @page
       :type-pi
-      [:div
-       [:div
-        {:class (css :flex :justify-center)}
-        [:h1 {:class (css :mt-8 :font-bold)} "PI"]]
-       [fireflies]
-       [:div {:class (css :flex :flex-col :gap-16)}
         [:div
-         {:class (css {:min-height "50vh"}
-                      :flex
-                      :flex-col :items-center
-                      :justify-center :w-full)}
-         [type-area]]
-        [:div {:class (css :flex :w-full :ml-20 :gap-8)}
-         [:div ;; {:class (css )}
-          [page-overview-ui @state]]
-         [:button
-          {:onClick (fn [] (reset! page :settings))}
-          "keymap"]]]]
+         [:div {:class (css :flex :justify-center)}
+          [:h1 {:class (css :mt-8 :font-bold)} "Type PI"]]
+         [fireflies]
+         [:div {:class (css :flex :flex-col :gap-16)}
+          [:div
+           {:class (css {:min-height "50vh"}
+                        :flex
+                        :flex-col :items-center
+                        :justify-center :w-full)}
+           [type-area]]
+          [:div {:class (css :flex :w-full :ml-20 :gap-8)}
+           [:div ;; {:class (css )}
+            [page-overview-ui @state]]
+           [:button
+            {:onClick (fn [] (reset! page :settings))}
+            "keymap"]]]]
       :settings [:div
                  [:h1
                   {:class (css :mt-8 :font-bold
                                :justify-center :flex)}
                   "type pi settings"]])))
 
+
 (defn ^:dev/after-load page
   []
   (rd/render [ui] (.getElementById js/document "app"))
   (let [zero (atom (.. js/document -timeline -currentTime))]
     (letfn [(animate [t]
-              (let [dt (/ (- t @zero) 1000)
-
-                    ]
+              (let [dt (/ (- t @zero) 1000)]
                 (reset! zero t)
                 (swap! game-state update
                        :entities
@@ -497,13 +545,5 @@
                              (entity-update dt)))))
               (js/requestAnimationFrame animate))]
       (js/requestAnimationFrame animate)))
-
-
-
-  (js/setInterval
-   (fn []
-     (spawn-firefly!))
-   2000
-   )
-
+  ;; (js/setInterval (fn [] (spawn-firefly!)) 2000)
   )
