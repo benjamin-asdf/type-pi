@@ -50,6 +50,7 @@
 (def state
   (r/atom
    {:cursor-idx 0
+    :page :type-pi
     :page-idx 0
     :per-page
     (* 3 (+ 2 1 2 1 2))
@@ -122,7 +123,10 @@
   ;; (case typed-kind)
   )
 
+(def $button (css :text-base :border :p-1 :rounded :border-color-white))
+
 (def $idle-cursor (css {:animation "blink 3s infinite"}))
+
 
 (def $almost-done
   (css {
@@ -501,34 +505,137 @@
                  "u-wobble")]} (:green @points)]]]])
 
 
+(defn current-search-params
+  []
+  (into {}
+        (->> (js->clj (into []
+                            (.. (js/URLSearchParams.
+                                  (.-search js/location))
+                                entries)))
+             (map (comp (fn [[k v]] [(keyword k) v]))))))
+
+
+
+
+
+(def ascending compare)
+
+(def descending (fn [a b] (compare b a)))
+
+(defn by
+  ([k] (by k ascending))
+  ([k c] (fn [a b] (c (k a) (k b)))))
+
+(defn then
+  [comparator1 comparator2]
+  (fn [a b]
+    (let [r (comparator1 a b)]
+      (if (zero? r) (comparator2 a b) r))))
+
+(sort (-> (by :a)
+          (then (by :b))
+          (then (by :c descending)))
+      [{:a 0 :b 1} {:a 1 :b 1} {:a 1 :b 0}
+       {:a 1 :b 0 :c 0} {:a 1 :b 0 :c 1}
+       {:a 1 :b 1 :c 1} {:a 1 :b 1 :c 0}])
+
+(defn keymap-ui
+  []
+  [:div
+   {:class (css :flex
+                :flex-col
+                :gap-2
+                :border-2
+                :border-white
+                {:max-width "30rem"}
+                :p-4)}
+   (doall
+     (for [[idx [v keymap-keys]]
+             (map-indexed
+               vector
+               (map (juxt key (comp #(map first %) val))
+                 (sort (-> (by (comp str key)))
+                       (group-by val @keymap))))]
+       (do
+         ^{:key idx}
+         [:div {:class (css :justify-between :w-full :flex)}
+          [:span
+           (doall ^{:key kidx}
+                  (doall
+                    (map-indexed
+                      (fn [idx o] (with-meta o {:key idx}))
+                      (interpose [:span ", "]
+                        (do (for [k (sort keymap-keys)]
+                              [:span
+                               {:class (css :bg-slate-600
+                                            :rounded
+                                            :p-1
+                                            :text-center
+                                            {:min-width
+                                               "2rem"}
+                                            :cursor-pointer)
+                                :on-click (fn [])} k]))))))]
+          [:span v]])))])
+
+;; (swap! state assoc :page :settings)
+
 (defn ui
   []
-  (let [page (r/atom :type-pi)]
-    (case @page
-      :type-pi
-        [:div
-         [:div {:class (css :flex :justify-center)}
-          [:h1 {:class (css :mt-8 :font-bold)} "Type PI"]]
-         [fireflies]
-         [:div {:class (css :flex :flex-col :gap-16)}
-          [:div
-           {:class (css {:min-height "50vh"}
-                        :flex
-                        :flex-col :items-center
-                        :justify-center :w-full)}
-           [type-area]]
-          [:div {:class (css :flex :w-full :ml-20 :gap-8)}
-           [:div ;; {:class (css )}
-            [page-overview-ui @state]]
-           [:button
-            {:onClick (fn [] (reset! page :settings))}
-            "keymap"]]]]
-      :settings [:div
-                 [:h1
-                  {:class (css :mt-8 :font-bold
-                               :justify-center :flex)}
-                  "type pi settings"]])))
-
+  (case (:page @state)
+    :type-pi
+    [:div
+     [:div {:class (css :flex :justify-center)}
+      [:h1 {:class (css :mt-8 :font-bold)} "Type PI"]]
+     [fireflies]
+     [:div {:class (css :flex :flex-col :gap-16)}
+      [:div
+       {:class (css {:min-height "50vh"}
+                    :flex
+                    :flex-col :items-center
+                    :justify-center :w-full)} [type-area]]
+      [:div {:class (css :flex :w-full :justify-between)}
+       [:div {:class (css :ml-20)}
+        [page-overview-ui @state]]
+       [:div
+        {:class
+         (css
+           {:min-width "20rem"
+            :margin-right "20vw"})}
+        [:button
+         {:on-click
+          (fn []
+            (let [hidden? (@state :keymap-hidden?)]
+              (if hidden?
+                (js/localStorage.removeItem "keymap")
+                (js/localStorage.setItem "keymap" "hidden"))
+              (swap! state assoc :keymap-hidden? (not hidden?)))
+            )}
+         "keymap"]
+        (when-not
+            (or
+             (@state :keymap-hidden?)
+             (js/localStorage.getItem "keymap"))
+          [keymap-ui])]
+       ]]]
+    ;; :settings [:div {:class (css :relative)}
+    ;;            [:div
+    ;;             {:class
+    ;;              (css :absolute :top-0 :left-24)}
+    ;;             [:button
+    ;;              {:class
+    ;;               (css
+    ;;                 :text-base
+    ;;                 :border :p-1 :rounded :border-color-white)
+    ;;               :on-click
+    ;;               (fn []
+    ;;                 (swap! state assoc :page :type-pi))}
+    ;;              "back"]]
+    ;;            [:h1
+    ;;             {:class (css :mt-12 :font-bold
+    ;;                          :justify-center :flex)}
+    ;;             "keymap"]
+    ;;            [keymap-ui]]
+    ))
 
 (defn ^:dev/after-load page
   []
@@ -537,12 +644,14 @@
     (letfn [(animate [t]
               (let [dt (/ (- t @zero) 1000)]
                 (reset! zero t)
-                (swap! game-state update
-                       :entities
-                       (fn [ents]
-                         (-> ents
-                             (physics-update-2d dt)
-                             (entity-update dt)))))
+                (when
+                    (#{:type-pi} (:page @state))
+                    (swap! game-state update
+                           :entities
+                           (fn [ents]
+                             (-> ents
+                                 (physics-update-2d dt)
+                                 (entity-update dt))))))
               (js/requestAnimationFrame animate))]
       (js/requestAnimationFrame animate)))
   ;; (js/setInterval (fn [] (spawn-firefly!)) 2000)
