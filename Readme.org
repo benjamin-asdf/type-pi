@@ -3,3 +3,8 @@
 
 For the 10k digits pi:
 https://www.ocf.berkeley.edu/~sean/pi
+
+
+** Additional sounds
+
+[[https://freesound.org/people/qubodup/][qubodup]].

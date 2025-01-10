@@ -1,8 +1,9 @@
-{:aliases {:client {:extra-deps {reagent/reagent
-                                   {:mvn/version "1.2.0"}}}
-           :dev {:extra-deps {cider/cider-nrepl
-                                {:mvn/version "0.50.3"}}
-                 :extra-paths ["src/dev"]}}
+{:aliases
+ {:client {:extra-deps {reagent/reagent
+                        {:mvn/version "1.2.0"}}}
+  :dev {:extra-deps {cider/cider-nrepl
+                     {:mvn/version "0.50.3"}}
+        :extra-paths ["src/dev"]}}
  :deps {com.thheller/shadow-css {:mvn/version "0.4.6"}
         thheller/shadow-cljs {:mvn/version "2.28.18"}}
  :paths ["resources" "src/cljs" "src/clj"]}

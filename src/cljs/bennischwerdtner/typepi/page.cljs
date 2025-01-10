@@ -35,6 +35,23 @@
 (defn vector-len [v]
   (Math/sqrt (reduce + (map #(* % %) v))))
 
+(defn play-sound! [path volume]
+  (let [elm
+        (or
+         (.getElementById js/document (str "audio-" path))
+         (let [elm (js/document.createElement "audio")]
+           (set! (.-id elm) (str "audio-" path))
+           (set! (.-src elm) path)
+           (set! (.-type elm) "audio/mpeg")
+           (set! (.-volume elm) volume)
+           (js/document.body.appendChild elm)
+           elm))]
+    (when
+        (not (.-paused elm))
+      (set! (.-currentTime elm) 0))
+    (set! (.-volume elm) volume)
+    (.. elm (play))))
+
 (def dark-surface-color "#121212")
 (def dark-lighter "#1a1a1a")
 (def dark-lightest "#242424")
@@ -445,6 +462,8 @@
                            40)]
     (when reached-target?
       (set-wobble-anim!)
+      (when (< 300 (age e))
+        (play-sound! "757612__qubodup__pop-sound.wav" 0.5))
       (swap! points update :green inc))
     (cond-> e
       (< 500 (age e) 1000) (attracted "green-points" 0.5)
@@ -464,23 +483,25 @@
              (and (:lifetime e) (< (:lifetime e) 0))
              (assoc :kill? true)))))))
 
-
 (defn spawn-firefly!
   []
   (set-blink-anim!)
+  (play-sound! "plop.mp3" 1)
   (swap! game-state update
          :entities
          (fn [ents]
-           (into
-            ents
-            (repeatedly 1
-                        (fn []
-                          (->entity
-                           {:forces {:gravity [0 (+ 0.1 (rand 0.05))]}
-                            :kinetic-energy 100
-                            :firefly? true
-                            :pos (rand-on-element "number-text")
-                            :velocity [(norm 0 6000) (norm -1000 1000)]})))))))
+           (into ents
+                 (repeatedly
+                  1
+                  (fn []
+                    (->entity
+                     {:firefly? true
+                      :forces {:gravity [0
+                                         (+ 0.1 (rand 0.05))]}
+                      :kinetic-energy 100
+                      :pos (rand-on-element "number-text")
+                      :velocity [(norm 0 6000)
+                                 (norm -1000 1000)]})))))))
 
 (defn fireflies
   []
@@ -579,63 +600,47 @@
 
 ;; (swap! state assoc :page :settings)
 
+;; (defn sound-effect
+;;   [path]
+;;   [:audio.sound-effect {:id (str "audio-" path)}
+;;    {:src path :type "audio/mpeg"}])
+
+
+
+
+
+
+
+
 (defn ui
   []
-  (case (:page @state)
-    :type-pi
+  [:div
+   [:div {:class (css :flex :justify-center)}
+    [:h1 {:class (css :mt-8 :font-bold)} "Type PI"]]
+   [fireflies]
+   [:div {:class (css :flex :flex-col :gap-16)}
     [:div
-     [:div {:class (css :flex :justify-center)}
-      [:h1 {:class (css :mt-8 :font-bold)} "Type PI"]]
-     [fireflies]
-     [:div {:class (css :flex :flex-col :gap-16)}
-      [:div
-       {:class (css {:min-height "50vh"}
-                    :flex
-                    :flex-col :items-center
-                    :justify-center :w-full)} [type-area]]
-      [:div {:class (css :flex :w-full :justify-between)}
-       [:div {:class (css :ml-20)}
-        [page-overview-ui @state]]
-       [:div
-        {:class
-         (css
-           {:min-width "20rem"
-            :margin-right "20vw"})}
-        [:button
-         {:on-click
-          (fn []
-            (let [hidden? (@state :keymap-hidden?)]
-              (if hidden?
-                (js/localStorage.removeItem "keymap")
-                (js/localStorage.setItem "keymap" "hidden"))
-              (swap! state assoc :keymap-hidden? (not hidden?)))
-            )}
-         "keymap"]
-        (when-not
-            (or
-             (@state :keymap-hidden?)
-             (js/localStorage.getItem "keymap"))
-          [keymap-ui])]
-       ]]]
-    ;; :settings [:div {:class (css :relative)}
-    ;;            [:div
-    ;;             {:class
-    ;;              (css :absolute :top-0 :left-24)}
-    ;;             [:button
-    ;;              {:class
-    ;;               (css
-    ;;                 :text-base
-    ;;                 :border :p-1 :rounded :border-color-white)
-    ;;               :on-click
-    ;;               (fn []
-    ;;                 (swap! state assoc :page :type-pi))}
-    ;;              "back"]]
-    ;;            [:h1
-    ;;             {:class (css :mt-12 :font-bold
-    ;;                          :justify-center :flex)}
-    ;;             "keymap"]
-    ;;            [keymap-ui]]
-    ))
+     {:class (css {:min-height "50vh"}
+                  :flex
+                  :flex-col :items-center
+                  :justify-center :w-full)} [type-area]]
+    [:div {:class (css :flex :w-full :justify-between)}
+     [:div {:class (css :ml-20)} [page-overview-ui @state]]
+     [:div
+      {:class (css {:margin-right "20vw"
+                    :min-width "20rem"})}
+      [:button
+       {:on-click
+        (fn []
+          (let [hidden? (@state :keymap-hidden?)]
+            (if hidden?
+              (js/localStorage.removeItem "keymap")
+              (js/localStorage.setItem "keymap" "hidden"))
+            (swap! state assoc
+                   :keymap-hidden?
+                   (not hidden?))))} "keymap"]
+      (when-not (or (@state :keymap-hidden?))
+        [keymap-ui])]]]])
 
 (defn ^:dev/after-load page
   []
@@ -644,15 +649,12 @@
     (letfn [(animate [t]
               (let [dt (/ (- t @zero) 1000)]
                 (reset! zero t)
-                (when
-                    (#{:type-pi} (:page @state))
-                    (swap! game-state update
-                           :entities
-                           (fn [ents]
-                             (-> ents
-                                 (physics-update-2d dt)
-                                 (entity-update dt))))))
+                (when (#{:type-pi} (:page @state))
+                  (swap! game-state update
+                    :entities
+                    (fn [ents]
+                      (-> ents
+                          (physics-update-2d dt)
+                          (entity-update dt))))))
               (js/requestAnimationFrame animate))]
-      (js/requestAnimationFrame animate)))
-  ;; (js/setInterval (fn [] (spawn-firefly!)) 2000)
-  )
+      (js/requestAnimationFrame animate))))

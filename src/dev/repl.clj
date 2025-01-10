@@ -43,8 +43,4 @@
 
 
 (comment
-  (map
-   (juxt char #(- %  (dec (int \a))))
-   (range (int \a) (+ 16 (int \a))))
-  (go)
-  (shadow/reload-deps!))
+  (go))
