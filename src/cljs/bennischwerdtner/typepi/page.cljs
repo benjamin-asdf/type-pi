@@ -303,9 +303,9 @@
                     [
                      (css :text-6xl
                           {:transition "0.3s all"})
-                     (when (= 1 cursor-idx)
-                       (css {:color "var(--green-yellow)"}))
-                     ]}
+                     (when (odd? cursor-idx)
+                       (css
+                         {:color "var(--green-yellow)"}))]}
               "π"]]]
            [:div#number-text
             {:class
@@ -534,10 +534,6 @@
                                   (.-search js/location))
                                 entries)))
              (map (comp (fn [[k v]] [(keyword k) v]))))))
-
-
-
-
 
 (def ascending compare)
 

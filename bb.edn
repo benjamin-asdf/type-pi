@@ -1,9 +1,12 @@
 {:deps {io.github.babashka/sci.nrepl {:mvn/version "0.0.2"}}
- :tasks
-   {babel-build (shell
-                  "npx babel src/js --out-dir src/gen")
-    babel-watch
-      (shell
-        "npx babel src/js --out-dir src/gen --watch")
-    serve-local (shell
-                  "http-server :dir resources/public/")}}
+ :tasks {:requires ([babashka.fs :as fs])
+         build {:depends [clean]
+                :task (do (shell "mkdir -p dist")
+                          (shell
+                            "npx shadow-cljs release app")
+                          (shell "script/build.sh"))}
+         clean (shell "rm -r dist")
+         deploy {:depends [build]
+                 :task (shell "script/deploy.sh")}
+         serve-local
+           (shell "http-server :dir resources/public/")}}
