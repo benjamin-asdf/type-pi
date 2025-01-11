@@ -20,10 +20,11 @@
       [(io/file "src" "cljs")]
       ["cljs" "cljc" "clj"]
       (fn [_]
-        (try (println "-- refresh css/cljs --")
-             (build/css-release)
-             (shadow.cljs.devtools.api/watch-compile! :app)
-             (catch Exception e (prn [:watch-failed e]))))))
+        (try
+          (println "-- refresh css/cljs --")
+          (build/css-release)
+          (shadow.cljs.devtools.api/watch-compile! :app)
+          (catch Exception e (prn [:watch-failed e]))))))
   ::started)
 
 (defn stop []
@@ -40,7 +41,6 @@
   (go)
   (println "started dev-watch")
   (deref (promise)))
-
 
 (comment
   (go))
