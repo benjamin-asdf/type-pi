@@ -5,7 +5,7 @@
                           (shell
                             "npx shadow-cljs release app")
                           (shell "script/build.sh"))}
-         clean (shell "rm -r dist")
+         clean (shell "rm -rf dist")
          deploy {:depends [build]
                  :task (shell "script/deploy.sh")}
          serve-local

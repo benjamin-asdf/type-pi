@@ -54,7 +54,7 @@
 
 (def dark-surface-color "#121212")
 (def dark-lighter "#1a1a1a")
-(def dark-lightest "#242424")
+(def dark-lightest "#454545")
 
 ;; contrast with dark-lightest is 12.05:1
 (def navajo-white "#ffdead")
@@ -98,9 +98,7 @@
 
 (def points (r/atom {:green 0}))
 
-(defn next-pi-idx
-  [{:keys [cursor-idx per-page page-idx]}]
-  (+ (* per-page page-idx) cursor-idx))
+
 
 (defonce keymap
   (r/atom
@@ -144,7 +142,6 @@
 
 (def $idle-cursor (css {:animation "blink 3s infinite"}))
 
-
 (def $almost-done
   (css {
         ;; :animation "blink-border 3s infinite"
@@ -174,6 +171,26 @@
   (cond (< per-page (inc cursor-idx)) (page-forward state)
         (< cursor-idx 0) (page-backward state)
         :else state))
+
+(defn next-pi-idx
+  [{:keys [cursor-idx per-page page-idx]}]
+  (+ (* per-page page-idx) cursor-idx))
+
+(defn normalize-state
+  [{:as s :keys [cursor-idx per-page page-idx]}]
+  (let [index (next-pi-idx s)
+        index (max 0 index)]
+    (merge s
+           {:cursor-idx (mod index per-page)
+            :page-idx (int (/ index per-page))
+            :typed
+            (into []
+                  (repeat (mod index per-page) :revealed))
+            :typed-history []})))
+
+(defn cursor-forward
+  [state amount]
+  (normalize-state (update state :cursor-idx + amount)))
 
 (defn page-almost-succ?
   [{:as state :keys [typed-history cursor-idx per-page
@@ -230,8 +247,6 @@
     [:span {:class (css :mx-2 :text-5xl)}
      (next-pi-idx state)]]
    [:div {:class (css :text-sm)} "cursor: " cursor-idx]])
-
-;; (defn)
 
 (defn type-area
   [{:keys []}]
@@ -317,16 +332,24 @@
               (fn [idx c]
                 [:span
                  {:class
+
+
                   (str
                    (css :transition-all)
-                   " " (case (get typed idx :no)
-                         :wrong "u-error"
-                         :revealed "u-color-default"
-                         :no
-                         ;; "u-color-default"
-                         (css {:color
-                               "transparent"})
-                         "u-success")
+                   " "
+                   (case
+                       ;; (if (< idx cursor-idx)
+                       ;;   :revealed
+                       ;;   (get typed idx :no))
+                       (get typed idx :no)
+                       :wrong "u-error"
+                       :revealed "u-color-default"
+                       :no
+                       ;; "u-color-default"
+                       (css {:color
+                             "transparent"})
+                       "u-success")
+
                    " "
                    (when (= cursor-idx idx)
                      (str
@@ -337,6 +360,8 @@
                       " "
                       (when @idle?
                         $idle-cursor))))
+
+
                   :key idx} c])
               (take per-page
                     (drop (* page-idx per-page)
@@ -584,26 +609,72 @@
                       (interpose [:span ", "]
                         (do (for [k (sort keymap-keys)]
                               [:span
-                               {:class (css :bg-slate-600
-                                            :rounded
-                                            :p-1
-                                            :text-center
-                                            {:min-width
-                                               "2rem"}
-                                            :cursor-pointer)
+                               {:class
+                                (css "u-background-lightest"
+                                     :rounded
+                                     :p-1
+                                     :text-center
+                                     {:min-width
+                                      "2rem"}
+                                     :cursor-pointer)
                                 :on-click (fn [])} k]))))))]
           [:span v]])))])
 
-;; (swap! state assoc :page :settings)
-
-;; (defn sound-effect
-;;   [path]
-;;   [:audio.sound-effect {:id (str "audio-" path)}
-;;    {:src path :type "audio/mpeg"}])
 
 
 
 
+
+(defn index-jump-ui
+  [{:as s :keys []}]
+  (let [by-how-much (r/atom 100)]
+    (fn []
+      [:div {:class (css :mt-2)}
+       [:div {:class (css :flex :gap-3 :items-center)}
+        (let [btn (fn [{:keys [on-click]} content]
+                    [:button
+                     {:class (css :rounded
+                                  :p-1
+                                  :border
+                                  :border-white
+                                  :hover
+                                  {:min-height "2.5rem"
+                                   :min-width "3rem"}
+                                  {:border-color
+                                     "var(--navajo-white)"})
+                      :on-click on-click} content])]
+          (doall
+            (map-indexed
+              (fn [idx v] (with-meta v {:key idx}))
+              [(btn {:on-click (fn []
+                                 (swap! state cursor-forward
+                                   (- @by-how-much)))}
+                    [:div {:class (css :text-4xl)} "←"])
+               [:div (next-pi-idx s)]
+               (btn {:on-click (fn []
+                                 (swap! state cursor-forward
+                                   @by-how-much))}
+                    [:div {:class (css :text-4xl)} "→"])
+               [:button
+                {:class (css :rounded
+                             :p-1
+                             :flex
+                             :items-center
+                             :justify-center
+                             :border
+                             :border-white
+                             :hover
+                             :text-center
+                             {:min-height "2.5rem"
+                              :min-width "5rem"}
+                             {:border-color
+                                "var(--navajo-white)"})
+                 :on-click (fn []
+                             (swap! by-how-much
+                               {100 1000
+                                500 100
+                                1000 500}))}
+                @by-how-much]])))]])))
 
 
 
@@ -621,7 +692,10 @@
                   :flex-col :items-center
                   :justify-center :w-full)} [type-area]]
     [:div {:class (css :flex :w-full :justify-between)}
-     [:div {:class (css :ml-20)} [page-overview-ui @state]]
+     [:div {:class (css :ml-20)}
+      [page-overview-ui @state]
+      [index-jump-ui @state]
+      ]
      [:div
       {:class (css {:margin-right "20vw"
                     :min-width "20rem"})}
@@ -638,6 +712,8 @@
       (when-not (or (@state :keymap-hidden?))
         [keymap-ui])]]]])
 
+
+
 (defn ^:dev/after-load page
   []
   (rd/render [ui] (.getElementById js/document "app"))
@@ -647,10 +723,15 @@
                 (reset! zero t)
                 (when (#{:type-pi} (:page @state))
                   (swap! game-state update
-                    :entities
-                    (fn [ents]
-                      (-> ents
-                          (physics-update-2d dt)
-                          (entity-update dt))))))
+                         :entities
+                         (fn [ents]
+                           (-> ents
+                               (physics-update-2d dt)
+                               (entity-update dt))))))
               (js/requestAnimationFrame animate))]
       (js/requestAnimationFrame animate))))
+
+
+
+(comment
+  @state)
