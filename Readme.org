@@ -1,4 +1,9 @@
 
+* This is deployed:
+
+https://benjamin-asdf.github.io/type-pi/
+
+
 * Acknowledgements
 
 For the 10k digits pi:
