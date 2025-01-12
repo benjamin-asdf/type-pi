@@ -1,7 +1,22 @@
-
 * This is deployed:
 
 https://benjamin-asdf.github.io/type-pi/
+
+* Dev
+
+#+begin_src
+  bb tasks
+#+end_src
+
+
+- =bb serve local= for a dev http server.
+
+- Start clj, then eval [[file:src/dev/repl.clj][file]] src/dev/repl.clj and run =go=.
+
+** Growth area:
+
+- update the css and the js build consistently,
+- currently I need to either reload or trigger another build with a file change
 
 
 * Acknowledgements

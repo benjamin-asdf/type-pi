@@ -56,49 +56,45 @@
 (def dark-lighter "#1a1a1a")
 (def dark-lightest "#454545")
 
-;; contrast with dark-lightest is 12.05:1
 (def navajo-white "#ffdead")
 (def green-yellow "#adff2f")
-;; black on green-yellow is also good
 
 (defonce pi (r/atom ""))
-(defonce typed (r/atom []))
 
 (def state
   (r/atom
     {:cursor-idx 0
      :grouping-scheme "aabaabaa"
+     :keymap {"." :repeat
+              ":" :reveal-group
+              ";" :reveal
+              ">" :reveal-page
+              "ArrowLeft" :left
+              "ArrowRight" :right
+              "Backspace" :back
+              "a" "1"
+              "b" "2"
+              "c" "3"
+              "d" "4"
+              "e" "5"
+              "f" "6"
+              "g" "7"
+              "h" "8"
+              "i" "9"
+              "j" "9"
+              "k" "4"
+              "l" "2"
+              "m" "3"
+              "n" "9"
+              "o" "0"
+              "p" "8"
+              "s" "6"
+              "t" "4"
+              "u" "0"
+              "y" "5"}
      :page :type-pi
      :page-idx 0
      :per-page (* 3 (+ 2 1 2 1 2))
-     :keymap
-     {"." :repeat
-      ":" :reveal-group
-      ";" :reveal
-      ">" :reveal-page
-      "ArrowLeft" :left
-      "ArrowRight" :right
-      "Backspace" :back
-      "a" "1"
-      "b" "2"
-      "c" "3"
-      "d" "4"
-      "e" "5"
-      "f" "6"
-      "g" "7"
-      "h" "8"
-      "i" "9"
-      "j" "9"
-      "k" "4"
-      "l" "2"
-      "m" "3"
-      "n" "9"
-      "o" "0"
-      "p" "8"
-      "s" "6"
-      "t" "4"
-      "u" "0"
-      "y" "5"}
      :typed []
      :typed-history []}))
 
@@ -118,7 +114,6 @@
                       ;;  :forces {:gravity [0 0.1]}}
                       ]}))
 
-
 (defonce wobble-anim-state
   (r/atom :idle))
 (defonce blink-anim-state
@@ -126,8 +121,7 @@
 
 (def points (r/atom {:green 0}))
 
-;; (def number-k? (into #{} (map str (range 10))))
-;; (def key-k? (into #{} (vals @keymap)))
+;; -----------
 
 (defn group-by-scheme
   [coll scheme]
@@ -136,24 +130,14 @@
               acc
               (grp (conj acc
                          (sequence
-                           (comp (partition-by first)
-                                 (map (fn [g]
-                                        (map (fn [elm]
-                                               (second elm))
-                                          g))))
-                           (map vector scheme coll)))
+                          (comp (partition-by first)
+                                (map (fn [g]
+                                       (map (fn [elm]
+                                              (second elm))
+                                            g))))
+                          (map vector scheme coll)))
                    (drop (count scheme) coll))))]
     (grp [] coll)))
-
-(-> (js/fetch "pi.txt")
-    (.then #(.. % text))
-    (.then (fn [r]
-             (reset! pi r))))
-
-
-(defn pi-number [{:keys [typed-kind]}]
-  ;; (case typed-kind)
-  )
 
 (def $button (css :text-base :border :p-1 :rounded :border-color-white))
 
@@ -206,7 +190,6 @@
                   (repeat (mod index per-page) :revealed))
             :typed-history []})))
 
-
 (defn cursor-forward
   [state amount]
   (normalize-state (update state :cursor-idx + amount)))
@@ -230,12 +213,12 @@
 (declare update-typed)
 
 (defn handle-repeat
-  [{:as state :keys [typed-history]} pi group-len]
+  [{:as state :keys [typed-history]} pi]
   (if-let [rep (first (drop-while
-                        (complement
-                          (into #{} (map str (range 0 10))))
-                        (reverse typed-history)))]
-    (update-typed state pi rep group-len)
+                       (complement
+                        (into #{} (map str (range 0 10))))
+                       (reverse typed-history)))]
+    (update-typed state pi rep)
     state))
 
 (defn handle-reveal [state]
@@ -250,10 +233,11 @@
       (update :cursor-idx + to-reveal)))
 
 (defn handle-reveal-group
-  [state group-len]
-  (reveal-many state
-               (- group-len
-                  (mod (:cursor-idx state) group-len))))
+  [state]
+  (let [group-len (count (:grouping-scheme state))]
+    (reveal-many state
+                 (- group-len
+                    (mod (:cursor-idx state) group-len)))))
 
 (defn reveal-page
   [state]
@@ -275,19 +259,18 @@
 (defn update-typed
   [{:as state
     :keys [typed-history per-page page-idx page-revealed?]}
-   pi k group-len]
+   pi k]
   (let [correct? (correct? pi k)
         state
           (cond-> state
             (= k :back) (handle-back)
             (:page-revealed? state) (dissoc :page-revealed?)
             (not= :repeat k) (update :typed-history conj k)
-            (= :repeat k) (handle-repeat pi group-len)
+            (= :repeat k) (handle-repeat pi)
             (or correct? (= k :reveal)) (update :cursor-idx
                                                 inc)
             (= k :reveal) (update :typed conj :revealed)
-            (= k :reveal-group) (handle-reveal-group
-                                 group-len)
+            (= k :reveal-group) (handle-reveal-group)
             (= k :reveal-page) (reveal-page)
             correct? (update :typed conj :success)
             ((into #{} (vals (:keymap state))) k)
@@ -333,9 +316,11 @@
                            (when (correct? pi k)
                              (spawn-firefly!))
                            (when (incorrect? pi k)
-
+                             ;; TODO:
+                             ;; flash the number or something
+                             ;; at the nth try
                              )
-                           (swap! state update-typed pi k (count (@state :grouping-scheme)))
+                           (swap! state update-typed pi k)
                            (swap! idle? (constantly false)))))
         keydown-listener (js/window.addEventListener
                           "keydown"
@@ -377,7 +362,6 @@
               {:keys [page-idx cursor-idx per-page
                       typed]}
               @state]
-
           [:div
            {:class
             [$base
@@ -408,24 +392,22 @@
                    (map-indexed
                     (fn [idx c]
                       [:span
-                       {:class (str (css :transition-all)
-                                    " " (case
-                                            ;; (if (< idx cursor-idx)
-                                            ;;   :revealed
-                                            ;;   (get typed idx :no))
-                                            (get typed idx :no)
-                                            :wrong "u-error"
-                                            :revealed "u-color-default"
-                                            :no
-                                            ;; "u-color-default"
-                                            (css {:color "transparent"})
-                                            "u-success")
-                                    " " (when (= cursor-idx idx)
-                                          (str (css :underline
-                                                    {:text-decoration-color
-                                                     "var(--navajo-white)"})
-                                               " "
-                                               (when @idle? $idle-cursor))))
+                       {:class (str
+                                ;; (css :transition-all)
+                                " " (case
+                                        (get typed idx :no)
+                                        :wrong "u-error"
+                                        :revealed "u-color-default"
+                                        :no
+                                        ;; "u-color-default"
+                                        (css {:color "transparent"})
+                                        "u-success")
+                                " " (when (= cursor-idx idx)
+                                      (str (css :underline
+                                                {:text-decoration-color
+                                                 "var(--navajo-white)"})
+                                           " "
+                                           (when @idle? $idle-cursor))))
                         :key idx}
                        c])
                     characters)]
@@ -776,6 +758,12 @@
         [keymap-ui])]]]])
 
 
+;; -----------------------------------------
+
+(-> (js/fetch "pi.txt")
+    (.then #(.. % text))
+    (.then (fn [r]
+             (reset! pi r))))
 
 (defn ^:dev/after-load page
   []
@@ -795,40 +783,11 @@
       (js/requestAnimationFrame animate))))
 
 
-#_(reset! state
 
-        {:cursor-idx 18
-         :page :type-pi
-         :page-idx 31
-         :per-page 24
-         :typed [:revealed :revealed :revealed :revealed :revealed
-                 :revealed :revealed :revealed :revealed :revealed
-                 :revealed :revealed :revealed :revealed :revealed
-                 :revealed :success :success]
-         :typed-history ["4" "9" "Meta"]})
 
 
 
 
 (comment
-  @state
-
-  {:cursor-idx 18
-   :page :type-pi
-   :page-idx 31
-   :per-page 24
-   :typed [:revealed :revealed :revealed :revealed :revealed
-           :revealed :revealed :revealed :revealed :revealed
-           :revealed :revealed :revealed :revealed :revealed
-           :revealed :success :success]
-   :typed-history ["4" "9" "Meta" "Control" "Meta" "Meta"]}
-
   (apply str (take 50 (drop 760 @pi)))
-  "49999998372978049951059731732816096318595024459455"
-  ;; (group-by-scheme (range 10) "aabaabaa")
-
-
-
-
-
-  )
+  "49999998372978049951059731732816096318595024459455")
