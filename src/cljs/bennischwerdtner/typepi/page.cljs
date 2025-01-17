@@ -91,6 +91,7 @@
               "t" "4"
               "u" "0"
               "y" "5"}
+     :incorrect-counter 0
      :page :type-pi
      :page-idx 0
      :per-page (* 3 (+ 2 1 2 1 2))
@@ -141,6 +142,11 @@
 (def $button (css :text-base :border :p-1 :rounded :border-color-white))
 
 (def $idle-cursor (css {:animation "blink 3s infinite"}))
+(def $incorrect-blink
+  (css
+    {:animation "blink 3s infinite"
+     :color "var(--navajo-white)"}))
+
 
 (def $almost-done
   (css {
@@ -260,31 +266,41 @@
     :keys [typed-history per-page page-idx page-revealed?]}
    pi k]
   (let [correct? (correct? pi k)
+        incorrect? (incorrect? pi k)
         state
-          (cond-> state
-            (= k :back) (handle-back)
-            (:page-revealed? state) (dissoc :page-revealed?)
-            (not= :repeat k) (update :typed-history conj k)
-            (= :repeat k) (handle-repeat pi)
-            (or correct? (= k :reveal)) (update :cursor-idx
-                                                inc)
-            (= k :reveal) (update :typed conj :revealed)
-            (= k :reveal-group) (handle-reveal-group)
-            (= k :reveal-page) (reveal-page)
-            correct? (update :typed conj :success)
-            ((into #{} (vals (:keymap state))) k)
-            (normalize-page))]
+        (cond-> state
+          (= k :back) (handle-back)
+          (:page-revealed? state) (dissoc :page-revealed?)
+          (not= :repeat k) (update :typed-history conj k)
+          (= :repeat k) (handle-repeat pi)
+          (or correct? (= k :reveal))
+          (update :cursor-idx inc)
+          (or correct? (= k :reveal))
+          (assoc :incorrect-counter 0)
+          (= k :reveal) (update :typed conj :revealed)
+          (= k :reveal-group) (handle-reveal-group)
+          (= k :reveal-page) (reveal-page)
+
+          correct? (update :typed conj :success)
+
+          incorrect?
+          (update :incorrect-counter inc)
+
+
+          ((into #{} (vals (:keymap state))) k)
+          (normalize-page))]
     (if (and (#{:reveal :reveal-group :reveal-page} k)
              (zero? (:cursor-idx state))
              (not page-revealed?))
       (-> state
           (assoc :cursor-idx per-page
                  :page-revealed? true
-                 :typed (into []
-                              (repeat per-page :revealed))
+                 :typed (into [] (repeat per-page :revealed))
                  :typed-history []
                  :page-idx page-idx))
       state)))
+
+
 
 (defn page-overview-ui
   [{:as state
@@ -305,22 +321,90 @@
      (next-pi-idx state)]]
    [:div {:class (css :text-sm)} "cursor: " cursor-idx]])
 
+(defn character-id [idx]
+  (str "type-area-character-" idx))
+
+
+(defn type-area-characters
+  [{:keys [pi idle? grouping-scheme cursor-idx per-page
+           incorrect-counter
+           page-idx typed]}]
+  [:div#number-text
+   {:class (css :tracking-widest :text-3xl [:xl :text-5xl])}
+   (doall
+     (let [characters (take per-page
+                            (drop (* page-idx per-page) pi))
+           characters-rendered
+             (map-indexed
+               (fn [idx c]
+                 (let [incorrect-blink?
+                       (when (= cursor-idx idx)
+                         (< 2 incorrect-counter))]
+                   (if incorrect-blink?
+                     [:span
+                      {:id (str "type-area-character-" idx)
+                       :style {:position :relative}}
+                      [:span
+                       {:class
+                        (css
+                          :absolute
+                          :underline
+                          {:color "transparent"
+                           :text-decoration-color
+                           "var(--navajo-white)"})}
+                       c]
+                      [:span
+                       {:class
+                        [(str
+                          (when (= cursor-idx idx)
+                            (str
+                             " "
+                             (when incorrect-blink?
+                               $incorrect-blink))))]
+
+                        :key idx}
+                       c]]
+                     [:span
+                      {:class [(str
+                                ;; (css :transition-all)
+                                " " (case (get typed idx :no)
+                                      :wrong "u-error"
+                                      :revealed "u-color-default"
+                                      :no
+                                      ;; "u-color-default"
+                                      (css {:color "transparent"})
+                                      :success "u-success")
+                                " " (when (= cursor-idx idx)
+                                      (str (css :underline
+                                                {:text-decoration-color
+                                                 "var(--navajo-white)"})
+                                           " "
+                                           (when idle? $idle-cursor))))]
+                       :id (str "type-area-character-" idx)
+                       :key idx} c])))
+               characters)]
+       (map-indexed
+         (fn [idx ui] [:span {:key idx} ui])
+         (mapcat identity
+           (mapcat identity
+             (interpose [[[:span "  "]]]
+               (map (fn [grp] (interpose [[:span " "]] grp))
+                 (group-by-scheme characters-rendered
+                                  grouping-scheme))))))))])
+
+
+
 (defn type-area
   [{:keys []}]
   (let [idle? (r/atom false)
         idle-timeout (r/atom nil)
-        handle-typed (fn [k]
-                       (when-let [pi @pi]
-                         (let [k ((@state :keymap) (str k) k)]
-                           (when (correct? pi k)
-                             (spawn-firefly!))
-                           (when (incorrect? pi k)
-                             ;; TODO:
-                             ;; flash the number or something
-                             ;; at the nth try
-                             )
-                           (swap! state update-typed pi k)
-                           (swap! idle? (constantly false)))))
+        handle-typed
+        (fn [k]
+          (when-let [pi @pi]
+            (let [k ((@state :keymap) (str k) k)]
+              (when (correct? pi k) (spawn-firefly!))
+              (swap! state update-typed pi k)
+              (swap! idle? (constantly false)))))
         keydown-listener (js/window.addEventListener
                           "keydown"
                           (fn [e]
@@ -362,74 +446,41 @@
                       typed]}
               @state]
           [:div
-           {:class
-            [$base
-             (when (page-almost-succ? @state)
-               $almost-done)
-             (when (= :playing @blink-anim-state)
-               "u-blink-green-anim")]
+           {:class [$base
+                    (when (page-almost-succ? @state)
+                      $almost-done)
+                    (when (= :playing @blink-anim-state)
+                      "u-blink-green-anim")]
             :tabIndex "0"}
            [:div {:class (css :relative)}
-            [:div {:class (css :absolute {:left "2rem" :top "-8rem"})}
-             [:div {:class
-                    [
-                     (css :text-6xl
-                          {:transition "0.3s all"})
-                     (when (odd? cursor-idx)
-                       (css
-                         {:color "var(--green-yellow)"}))]}
+            [:div
+             {:class (css :absolute
+                          {:left "2rem" :top "-8rem"})}
+             [:div
+              {:class [(css :text-6xl
+                            {:transition "0.3s all"})
+                       (when (odd? cursor-idx)
+                         (css
+                           {:color
+                            "var(--green-yellow)"}))]}
               "π"]]]
-           [:div#number-text
-            {:class
-             (css :tracking-widest
-                  :text-3xl
-                  [:xl :text-5xl])}
-            (doall
-             (let [characters
-                   (take per-page (drop (* page-idx per-page) @pi))
-                   characters-rendered
-                   (map-indexed
-                    (fn [idx c]
-                      [:span
-                       {:class (str
-                                ;; (css :transition-all)
-                                " " (case
-                                        (get typed idx :no)
-                                        :wrong "u-error"
-                                        :revealed "u-color-default"
-                                        :no
-                                        ;; "u-color-default"
-                                        (css {:color "transparent"})
-                                        "u-success")
-                                " " (when (= cursor-idx idx)
-                                      (str (css :underline
-                                                {:text-decoration-color
-                                                 "var(--navajo-white)"})
-                                           " "
-                                           (when @idle? $idle-cursor))))
-                        :key idx}
-                       c])
-                    characters)]
-               (map-indexed
-                (fn [idx ui]
-                  [:span {:key idx} ui])
-                (mapcat
-                 identity
-                 (mapcat
-                  identity
-                  (interpose
-                   [[[:span "  "]]]
-                   (map (fn [grp]
-                          (interpose
-                           [[:span " "]] grp))
-                        (group-by-scheme characters-rendered
-                                         (@state :grouping-scheme)))))))))]
+           [type-area-characters
+            (let [s @state]
+              (println (:incorrect-counter s))
+              {:cursor-idx cursor-idx
+               :grouping-scheme (:grouping-scheme s)
+               :incorrect-counter (:incorrect-counter s)
+               :idle @idle?
+               :page-idx page-idx
+               :per-page per-page
+               :pi @pi
+               :typed typed})]
+
            [:div {:class (css :relative)}
             [:div
              {:class (css :absolute
                           {:bottom "-5rem" :left "-1rem"}
-                          :text-3xl)}
-             page-idx]]]))})))
+                          :text-3xl)} page-idx]]]))})))
 
 (defn firefly
   [{:keys [pos] [x y] :pos}]
@@ -789,11 +840,6 @@
                                (entity-update dt))))))
               (js/requestAnimationFrame animate))]
       (js/requestAnimationFrame animate))))
-
-
-
-
-
 
 
 (comment
