@@ -14,6 +14,7 @@
     (vec (map * b (repeat a)))
     :else (* a b)))
 
+
 (defn v+ [a b]
   (cond
     (and (coll? a) (coll? b))
@@ -69,8 +70,6 @@
               ":" :reveal-group
               ";" :reveal
               ">" :reveal-page
-              "ArrowLeft" :left
-              "ArrowRight" :right
               "Backspace" :back
               "a" "1"
               "b" "2"
@@ -598,18 +597,27 @@
    [:div {:class (css :flex :justify-center)}
     [:div {:class (css :relative :flex :justify-center)}
      [:div#green-points
-      {:class [(css :absolute
-                    :p-1
-                    :transition-all
-                    {:height "2.5rem"
-                     :top "2rem"
-                     :width "2.5rem"}
-                    :min-w-0
-                    :text-center :text-black
-                    :rounded-full "c-background-success")
-               (when (= :playing @wobble-anim-state)
-                 "u-wobble")]} (:green @points)]]]])
-
+      {:class
+       [(css :absolute
+             :p-3
+             :pt-4
+             :flex
+             :items-center
+             :justify-center
+             :transition-all
+             {:height "3rem"
+              :top "2rem"
+              :width "3rem"}
+             :min-w-0
+             :text-center
+             :text-black
+             :rounded-full "c-background-success")
+        (when (= :playing @wobble-anim-state)
+          "u-wobble")]}
+      (if
+          (< 1000 (:green @points))
+          (str (int (/ (:green @points) 1000)) "k")
+          (:green @points))]]]])
 
 (defn current-search-params
   []
