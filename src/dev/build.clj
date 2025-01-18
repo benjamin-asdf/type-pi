@@ -1,4 +1,4 @@
-(ns build
+(ns dev.build
   (:require
    [shadow.css.build :as cb]
    [clojure.string :as str]
@@ -10,7 +10,7 @@
         (-> (cb/start)
             (cb/index-path
              ;; ~/repos/type_pi/src/clj/bennischwerdtner/typepi/
-             (io/file "src" "cljs")
+             (io/file "src")
              {})
             (cb/generate
              '{:ui {:entries
@@ -22,12 +22,3 @@
                                                 mod)]
       (prn [:CSS (name warning-type)
             (dissoc warning :warning-type)]))))
-
-
-(defn build []
-  )
-
-
-(comment
-
-  )
