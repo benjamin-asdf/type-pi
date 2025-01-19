@@ -1,12 +1,13 @@
-(ns bennischwerdtner.typepi.page
-  (:require
-   [reagent.dom :as rd]
-   [reagent.core :as r]
-   [clojure.edn :as edn]
+(ns
+    bennischwerdtner.typepi.page
+    (:require
+     [reagent.dom :as rd]
+     [reagent.core :as r]
+     [clojure.edn :as edn]
 
-   [shadow.css :refer [css] :include-macros true]
+     [shadow.css :refer [css] :include-macros true]
 
-   [bennischwerdtner.typepi.lib :as lib :refer [by ]]))
+     [bennischwerdtner.typepi.lib :as lib]))
 
 (def dark-surface-color "#121212")
 (def dark-lighter "#1a1a1a")
@@ -15,8 +16,40 @@
 (def navajo-white "#ffdead")
 (def green-yellow "#adff2f")
 
-(defonce pi
-  (r/atom ""))
+(defonce pi (r/atom ""))
+
+(def commands
+  (vec
+   (concat
+    (map str (range 0 10))
+    [:back :reveal :reveal-group :reveal-page])))
+
+(def default-keymap
+  {"." :repeat
+   ":" :reveal-group
+   ";" :reveal
+   ">" :reveal-page
+   "Backspace" :back
+   "a" "1"
+   "b" "2"
+   "c" "3"
+   "d" "4"
+   "e" "5"
+   "f" "6"
+   "g" "7"
+   "h" "8"
+   "i" "9"
+   "j" "9"
+   "k" "4"
+   "l" "2"
+   "m" "3"
+   "n" "9"
+   "o" "0"
+   "p" "8"
+   "s" "6"
+   "t" "4"
+   "u" "0"
+   "y" "5"})
 
 (def state
   (r/atom
@@ -35,43 +68,13 @@
     "aabaabaa"
     :incorrect-counter 0
     :keymap
-
-    (merge
-     {"." :repeat
-      ":" :reveal-group
-      ";" :reveal
-      ">" :reveal-page
-      "Backspace" :back
-      "a" "1"
-      "b" "2"
-      "c" "3"
-      "d" "4"
-      "e" "5"
-      "f" "6"
-      "g" "7"
-      "h" "8"
-      "i" "9"
-      "j" "9"
-      "k" "4"
-      "l" "2"
-      "m" "3"
-      "n" "9"
-      "o" "0"
-      "p" "8"
-      "s" "6"
-      "t" "4"
-      "u" "0"
-      "y" "5"
-      }
-     (or (try (edn/read-string
-               (js/localStorage.getItem
-                "keymap"))
-              (catch js/Error _
-                (do (js/localStorage.removeItem
-                     "keymap")
-                    {})))
-         nil)
-     )
+    (or
+     (try
+       (edn/read-string
+        (js/localStorage.getItem
+         "keymap"))
+       (catch js/Error _))
+     default-keymap)
     :page :type-pi
     :page-idx 0
     :per-page (* 3 (+ 2 1 2 1 2))
@@ -486,7 +489,6 @@
     :on-click (fn [])
     :tabIndex "0"} k])
 
-
 (defn keymap-ui
   []
   [:div
@@ -501,10 +503,11 @@
     (for [[idx [v keymap-keys]]
           (map-indexed
            vector
-           (map (juxt key (comp #(map first %) val))
-                (sort (->
-                       (by (comp lib/keychord-or-key->string key)))
-                      (group-by val (@state :keymap)))))]
+           (map (juxt first
+                      (comp #(map first %) second))
+                (map (juxt identity
+                           (group-by val (@state :keymap)))
+                     commands)))]
       ^{:key idx}
       [:div {:class (css :justify-between :w-full :flex)}
        [:span
@@ -515,7 +518,10 @@
            (fn [idx o] (with-meta o {:key idx}))
            (interpose [:span ", "]
                       (concat
-                       (for [k (sort (map lib/keychord-or-key->string keymap-keys))]
+                       (for [k (sort
+                                (map
+                                 lib/keychord-or-key->string
+                                 keymap-keys))]
                          [key-ui k])
                        [[:span
                          {:class (css :border
@@ -805,7 +811,6 @@
                        @what-you-just-pressed)]
                      [:div "release to assign"]])]])})))
 
-
 (defmethod dialog :delete-key
   [_ _]
   (let [what-you-just-pressed (r/atom nil)
@@ -873,17 +878,16 @@
        [dialog (:dialog @state) @state]
        [type-area])]
     [:div
-     {:class
-      (css :flex :gap-2 :w-full :justify-between)}
+     {:class (css :flex :gap-2 :w-full :justify-between)}
      [:div {:class (css :ml-20)}
       [:button
        {:on-click (fn []
                     (swap! state assoc
-                           :hide-things?
-                           (not (@state :hide-things?)))
+                      :hide-things?
+                      (not (@state :hide-things?)))
                     (js/localStorage.setItem
-                     "hide-things?"
-                     (prn-str (@state :hide-things?))))}
+                      "hide-things?"
+                      (prn-str (@state :hide-things?))))}
        (if (:hide-things? @state)
          "👀 show elements"
          "👀 hide elements")]
@@ -900,51 +904,61 @@
           :on-click (fn []
                       (swap! state assoc :bookmarks [])
                       (js/localStorage.removeItem
-                       "bookmarks"))
-          :tabIndex "0"}
-         "delete bookmarks"])]
-     [:div
-      {:class (css :w-full :flex :justify-end)}
+                        "bookmarks"))
+          :tabIndex "0"} "delete bookmarks"])]
+     [:div {:class (css :w-full :flex :justify-end)}
       [:div
-       {:class
-        (css
-          {:margin-right "25vw"
-           :min-width "20rem"})}
+       {:class (css {:margin-right "25vw"
+                     :min-width "20rem"})}
        (when-not (:hide-things? @state)
-         [:div {:class (css :flex :flex-col :gap-2)}
+         [:div
+          {:class
+           (css :flex :flex-col :gap-2
+                {:min-width "25rem"})}
           [:div "keymap"]
           [keymap-ui]
-          [:button
-           {:class (css :rounded :p-1 :border :border-white)
-            :on-click
-            (fn []
-              (js/scrollTo 0 0)
-              (swap! state assoc :dialog :delete-key))}
-           "Delete a key"]])]]]]])
+          [:div
+           {:class (css :flex :w-full :items-center :gap-2)}
+           [:button
+            {:class (css :rounded :p-1
+                         :w-full
+                         :border :border-white)
+             :on-click
+             (fn []
+               (js/scrollTo 0 0)
+               (swap! state assoc :dialog :delete-key))}
+            "Delete a key"]
+           [:button
+            {:class (css :rounded :p-1
+                         :w-full
+                         :border :border-white)
+             :on-click
+             (fn []
+               (swap! state assoc :keymap default-keymap)
+               (js/localStorage.removeItem "keymap"))}
+            "Reset keymap"]]])]]]]])
+
 
 ;; -----------------------------------------
 
-;; state setup
+(defn  setup
+  []
 
-(-> (js/fetch "pi.txt")
-    (.then #(.. % text))
-    (.then (fn [r]
-             (reset! pi r))))
+  (-> (js/fetch "pi.txt")
+      (.then #(.. % text))
+      (.then (fn [r]
+               (reset! pi r))))
 
-(when-let [bookmarks (js/localStorage.getItem "bookmarks")]
-  (swap! state assoc :bookmarks (try
-                                  (edn/read-string bookmarks)
-                                  (catch js/Error _ []))))
+  (when-let [bookmarks (js/localStorage.getItem "bookmarks")]
+    (swap! state assoc :bookmarks (try
+                                    (edn/read-string bookmarks)
+                                    (catch js/Error _ []))))
 
-(when-let [idx (:idx (lib/current-search-params))]
+  (when-let [idx (:idx (lib/current-search-params))]
     (swap! state cursor-forward
            idx))
 
-;; http://localhost:8090/?idx=312
 
-(defn ^:dev/after-load page
-  []
-  (rd/render [ui] (.getElementById js/document "app"))
   (let [zero (atom (.. js/document -timeline -currentTime))]
     (letfn [(animate [t]
               (let [dt (/ (- t @zero) 1000)]
@@ -957,8 +971,16 @@
                                (lib/physics-update-2d dt)
                                (lib/update-entities dt))))))
               (js/requestAnimationFrame animate))]
-      (js/requestAnimationFrame animate))))
+      (js/requestAnimationFrame animate)))
+  :setup)
 
+;; -------------------------------------------
+
+(defonce setup? (setup))
+
+(defn ^:dev/after-load page
+  []
+  (rd/render [ui] (.getElementById js/document "app")))
 
 (comment
   (apply str (take 50 (drop 760 @pi)))
