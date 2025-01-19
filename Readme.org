@@ -1,3 +1,4 @@
+
 * This is deployed:
 
 https://benjamin-asdf.github.io/type-pi/
@@ -8,15 +9,30 @@ https://benjamin-asdf.github.io/type-pi/
   bb tasks
 #+end_src
 
-
 - =bb serve local= for a dev http server.
 
 - Start clj, then eval [[file:src/dev/repl.clj][file]] src/dev/repl.clj and run =go=.
+- Connect to localhost 7014 with a cljs repl, if desired.
 
-** Growth area:
+- Occasionally, you have to make another change to trigger a correct update + css.
 
-- update the css and the js build consistently,
-- currently I need to either reload or trigger another build with a file change
+** Tech
+
+Makes heavy use of @thheller Thomas Heller stuff.
+
+This does not have a server at the moment. This is static website.
+
+- shadow-cljs to build clojurescript
+- reagent
+- shadow css to build css
+- https://github.com/thheller/shadow-css
+
+- If you use a server, you could use shadow-graft for the full theller stack.
+
+** Development Diary (YouTube)
+
+- https://youtu.be/0_CxXMKlNzQ?si=D0XoJ7OAdfxoa1pn
+- https://youtu.be/un7SscvuNEA?si=1NlKMff7CvysVRNy
 
 
 * Acknowledgements

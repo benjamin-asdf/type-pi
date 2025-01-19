@@ -1,13 +1,9 @@
-(ns
-    bennischwerdtner.typepi.page
-    (:require
-     [reagent.dom :as rd]
-     [reagent.core :as r]
-     [clojure.edn :as edn]
-
-     [shadow.css :refer [css] :include-macros true]
-
-     [bennischwerdtner.typepi.lib :as lib]))
+(ns bennischwerdtner.typepi.page
+  (:require [reagent.dom :as rd]
+            [reagent.core :as r]
+            [clojure.edn :as edn]
+            [shadow.css :refer [css] :include-macros true]
+            [bennischwerdtner.typepi.lib :as lib]))
 
 (def dark-surface-color "#121212")
 (def dark-lighter "#1a1a1a")
