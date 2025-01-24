@@ -1,0 +1,94 @@
+:root {
+    --dark-surface-color : #121212;
+    --dark-lighter : #1a1a1a;
+    --dark-lightest : #454545;
+    --navajo-white : #ffdead;
+    --green-yellow : #adff2f;
+}
+
+.c-background {
+    background-color: var(--dark-surface-color);
+}
+
+.c-background-success {
+    background-color: var(--green-yellow);
+}
+
+
+.u-background-lighter {
+    background-color: var(--dark-lighter);
+}
+
+.u-background-lightest {
+    background-color: var(--dark-lightest);
+}
+
+.u-success {
+    color: var(--green-yellow);
+}
+
+.u-error {
+    color: #ffa500;
+}
+
+.u-color-default {
+    color: var(--navajo-white)
+    
+}
+    
+body {
+    background-color: var(--dark-surface-color);
+    color: var(--navajo-white);
+    font-family: 'Roboto', sans-serif;
+    font-size: 1.5rem;
+    margin: 0;
+    padding: 0;
+}
+
+@keyframes blink {
+    0% { opacity: 0; }
+    50% { opacity: 1; }
+    100% { opacity: 0; }
+}
+        
+@keyframes blink-2 {
+    0% { border-color: var(--green-yellow); }
+    50% { border-color: transparent; }
+    100% { border-color: var(--green-yellow); }
+}
+
+@keyframes blink-green {
+    0% { border-color: transparent; }
+    30% { border-color: var(--green-yellow); }
+    50% { border-color: var(--green-yellow); }
+    100% { border-color: transparent; }
+}
+
+@keyframes wooble {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.5); }
+    100% { transform: scale(1); }
+}
+
+.u-wobble {
+    animation: wooble 0.3s;
+}
+
+.u-blink-green-anim {
+    animation: blink-green 1.2s;
+}
+
+@keyframes fade-green {
+    0% { color: var(--navajo-white); }
+    50% { color: var(--green-yellow); }
+    100% { color: var(--navajo-white); }
+}
+
+.u-fade-green-anim {
+    animation: fade-green 3s infinite;
+}
+
+.u-blink-anim {
+    animation: blink 1.2s;
+}
+
