@@ -42,10 +42,15 @@
    "n" "9"
    "o" "0"
    "p" "8"
+   "q" "7"
    "s" "6"
    "t" "4"
    "u" "0"
-   "y" "5"})
+   "v" "1"
+   "w" "2"
+   "x" "3"
+   "y" "5"
+   "z" "6"})
 
 (def state
   (r/atom
@@ -209,7 +214,6 @@
           ;; :revealed
           ))
 
-
 (defn reveal-many
   [state to-reveal]
   (-> state
@@ -281,7 +285,6 @@
                  :page-idx page-idx))
       state)))
 
-
 (defn play-anim!
   [ref play-time idle-time]
   (reset! ref :playing)
@@ -290,7 +293,6 @@
      (reset! ref :timeout)
      (js/setTimeout (fn [] (reset! ref :idle)) idle-time))
    play-time))
-
 
 (defn set-anim!
   [ref play-time idle-time]
@@ -305,17 +307,14 @@
   (set-anim! blink-anim-state 1200 50))
 
 (defn page-overview-ui
-  [{:as state
-    :keys [cursor-idx per-page page-idx]}]
+  [{:as state :keys [cursor-idx per-page page-idx]}]
   [:div
-   {:class (css {:min-width "13rem"}
+   {:class (css {:max-width "15rem" :min-width "15rem"}
                 :flex
                 :flex-col :border
                 :p-2 :gap-2
                 :px-4 {:border-color "white"})}
-   [:div "page: "
-    [:span {:class (css :text-3xl)}
-     page-idx]
+   [:div "page: " [:span {:class (css :text-3xl)} page-idx]
     [:span {:class (css :text-sm)} " / "
      (int (/ (count @pi) per-page))]]
    [:div [:span {:class (css :text-sm)} "index: "]
@@ -438,7 +437,6 @@
 
 (defmethod lib/entity-update :firefly
   [e state]
-  (println e state)
   (let [reached-target? (< (lib/distance (:pos e)
                                          (:green-points-position
                                           state))
@@ -539,8 +537,11 @@
   [_]
   (let [by-how-much (r/atom 100)]
     (fn [s]
-      [:div {:class (css :mt-2)}
-       [:div {:class (css :flex :gap-3 :items-center)}
+      [:div
+       {:class (css :mt-2
+                    {:max-width "15rem"
+                     :min-width "15rem"})}
+       [:div {:class (css :flex :gap-2 :items-center)}
         (let [btn (fn [{:keys [on-click]} content]
                     [:button
                      {:class (css :rounded
@@ -551,41 +552,39 @@
                                   {:min-height "2.5rem"
                                    :min-width "3rem"}
                                   {:border-color
-                                   "var(--navajo-white)"})
+                                     "var(--navajo-white)"})
                       :on-click on-click} content])]
           (doall
-           (map-indexed
-            (fn [idx v] (with-meta v {:key idx}))
-            [(btn {:on-click (fn []
-                               (swap! state cursor-forward
-                                      (- @by-how-much)))}
-                  [:div {:class (css :text-4xl)} "←"])
-             [:div (next-pi-idx s)]
-             (btn {:on-click (fn []
-                               (swap! state cursor-forward
-                                      @by-how-much))}
-                  [:div {:class (css :text-4xl)} "→"])
-
-             [:button
-              {:class (css :rounded
-                           :p-1
-                           :flex
-                           :items-center
-                           :justify-center
-                           :border
-                           :border-white
-                           :hover
-                           :text-center
-                           {:min-height "2.5rem"
-                            :min-width "5rem"}
-                           {:border-color
-                            "var(--navajo-white)"})
-               :on-click (fn []
-                           (swap! by-how-much
-                                  {100 1000
-                                   1000 760
-                                   760 100}))}
-              @by-how-much]])))]])))
+            (map-indexed
+              (fn [idx v] (with-meta v {:key idx}))
+              [(btn {:on-click (fn []
+                                 (swap! state cursor-forward
+                                   (- @by-how-much)))}
+                    [:div {:class (css :text-4xl)} "←"])
+               [:button
+                {:class (css :rounded
+                             :p-1
+                             :flex
+                             :items-center
+                             :justify-center
+                             :border
+                             :border-white
+                             :hover
+                             :text-center
+                             {:min-height "2.5rem"
+                              :min-width "5rem"}
+                             {:border-color
+                                "var(--navajo-white)"})
+                 :on-click (fn []
+                             (swap! by-how-much
+                               {100 1000
+                                760 100
+                                1000 760}))}
+                @by-how-much]
+               (btn {:on-click (fn []
+                                 (swap! state cursor-forward
+                                   @by-how-much))}
+                    [:div {:class (css :text-4xl)} "→"])])))]])))
 
 (defn type-area
   [{:keys []}]
@@ -757,9 +756,14 @@
   (let [what-you-just-pressed (r/atom nil)
         $inacitve (css :border-transparent)
         $active (css :border-white)
-        keydown-listener (fn [e]
-                           (reset! what-you-just-pressed
-                                   (lib/event->key-chord e)))
+        keydown-listener
+        (fn [e]
+          (let [kc (lib/event->key-chord e)]
+            (when-not
+                (#{"Alt" "Meta" "Control" "Shift"} (:key kc))
+              (reset!
+                 what-you-just-pressed
+                 (lib/event->key-chord e)))))
         keyup-listener (fn [_e]
                          (when @what-you-just-pressed
                            (swap! state set-keybind
@@ -937,35 +941,31 @@
 
 ;; -----------------------------------------
 
-(defn  setup
+(defn setup
   []
-
   (-> (js/fetch "pi.txt")
       (.then #(.. % text))
-      (.then (fn [r]
-               (reset! pi r))))
-
-  (when-let [bookmarks (js/localStorage.getItem "bookmarks")]
-    (swap! state assoc :bookmarks (try
-                                    (edn/read-string bookmarks)
-                                    (catch js/Error _ []))))
-
+      (.then (fn [r] (reset! pi r))))
+  (when-let [bookmarks (js/localStorage.getItem
+                         "bookmarks")]
+    (swap! state assoc
+      :bookmarks
+      (try (edn/read-string bookmarks)
+           (catch js/Error _ []))))
   (when-let [idx (:idx (lib/current-search-params))]
-    (swap! state cursor-forward
-           idx))
-
-
+    (swap! state cursor-forward idx))
   (let [zero (atom (.. js/document -timeline -currentTime))]
     (letfn [(animate [t]
               (let [dt (/ (- t @zero) 1000)]
                 (reset! zero t)
                 (when (#{:type-pi} (:page @state))
                   (swap! game-state update
-                         :entities
-                         (fn [ents]
-                           (-> ents
-                               (lib/physics-update-2d dt)
-                               (lib/update-entities dt))))))
+                    :entities
+                    (fn [ents]
+                      (binding [lib/*dt* dt]
+                        (-> ents
+                            (lib/physics-update-2d dt)
+                            (lib/update-entities dt)))))))
               (js/requestAnimationFrame animate))]
       (js/requestAnimationFrame animate)))
   :setup)

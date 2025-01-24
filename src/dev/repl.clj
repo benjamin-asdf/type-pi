@@ -51,4 +51,5 @@
   (println "started dev-watch")
   (deref (promise)))
 
-(comment (go))
+(comment
+  (go))

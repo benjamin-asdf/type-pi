@@ -1,5 +1,7 @@
 (ns bennischwerdtner.typepi.lib)
 
+(def ^:dynamic *dt*)
+
 (def ascending compare)
 
 (def descending (fn [a b] (compare b a)))
@@ -88,23 +90,23 @@
   (+ mean (* std (gaussianRandish))))
 
 (defn brownian-motion
-  [{:as e
-    :keys [kinetic-energy acceleration]
-    :or {acceleration 0}}]
+  [{:as e :keys [kinetic-energy acceleration] :or {acceleration 0}} dt]
   (assoc e
     :acceleration (v+ acceleration
-                      [(* kinetic-energy (norm 0 1))
-                       (* kinetic-energy (norm 0 1))])))
+                      [(* kinetic-energy (norm 0 1) dt 20)
+                       (* kinetic-energy (norm 0 1) dt 20)])))
 
 (defn apply-forces
   [e dt]
   (update e
           :acceleration
           (fn [a]
-            (v+ a
-                (v* 1000
-                    (reduce (fn [acc f] (v+ acc f))
-                            (vals (:forces e))))))))
+            (v+
+             a
+             (v*
+              (* 1000 62.5 dt)
+              (reduce (fn [acc f] (v+ acc f))
+                      (vals (:forces e))))))))
 
 (def element-position-1
   (fn [id]
@@ -124,8 +126,9 @@
   (let [diff (v- (element-position-1 id) (:pos e))
         len (vector-len diff)]
     (assoc-in e
-      [:forces [:attracted id]]
-      (v* (normalize-vector diff) force))))
+              [:forces [:attracted id]]
+              (v* (normalize-vector diff)
+                  force))))
 
 (defn physics-update-2d
   [entities dt]
@@ -133,10 +136,12 @@
            (cond-> e
              (:acceleration e)
              (update :velocity v+ (v* (:acceleration e) dt))
-             (:acceleration e) (update :acceleration v* 0.9)
+             (:acceleration e)
+             (update :acceleration v* (- 1 (* dt 62.5 0.1)))
              (:velocity e) (update :pos v+ (v* (:velocity e) dt))
-             (:velocity e) (update :velocity v* 0.9)
-             (:kinetic-energy e) (brownian-motion)
+             (:velocity e)
+             (update :velocity v* (- 1 (* dt 62.5 0.1)))
+             (:kinetic-energy e) (brownian-motion dt)
              true (apply-forces dt)))))
 
 (defn distance [a b]
@@ -158,6 +163,7 @@
              (:lifetime e) (update :lifetime #(- % dt))
              (and (:lifetime e) (< (:lifetime e) 0))
              (assoc :kill? true)))))))
+
 
 (defn current-search-params
   []
